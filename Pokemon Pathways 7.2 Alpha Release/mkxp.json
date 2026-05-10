@@ -25,7 +25,7 @@
     // OpenGL debug information to the console
     // (default: disabled)
     //
-    // "debugMode": false,
+     "debugMode": true,
 
 
     // Continuously print average FPS to console.

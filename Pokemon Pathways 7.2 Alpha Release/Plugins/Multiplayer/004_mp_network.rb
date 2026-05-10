@@ -7,7 +7,13 @@
 #    4. STATE_HANDSHAKING transition happens only after HANDSHAKE_ACK received
 #===============================================================================
 
-require 'socket'
+begin
+  require 'socket'
+rescue LoadError => e
+  # Some MKXP-Z builds expose TCPSocket without a loadable socket.rb.
+  # Continue if constants already exist; otherwise re-raise.
+  raise e if !defined?(TCPSocket) || !defined?(Socket)
+end
 require 'json'
 
 module MP_NetworkManager
@@ -63,6 +69,7 @@ module MP_NetworkManager
     @receive_buffer     = ""
     @queue_overflow_count = 0
     echoln "[MP] Network manager starting..."
+    mp_log("NET: start called") if defined?(mp_log)
     @main_thread = Thread.new { main_loop }
   end
 
@@ -110,6 +117,7 @@ module MP_NetworkManager
       @socket = TCPSocket.new(MP_ClientConfig::SERVER_IP, MP_ClientConfig::SERVER_PORT)
       @socket.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1)
       echoln "[MP] TCP connected. Waiting for $Trainer before handshake..."
+      mp_log("NET: TCP connected to #{MP_ClientConfig::SERVER_IP}:#{MP_ClientConfig::SERVER_PORT}") if defined?(mp_log)
 
       # FIX 2: Wait up to 10s for $Trainer to be available after map load
       wait_start = Time.now
@@ -119,6 +127,7 @@ module MP_NetworkManager
 
       unless $Trainer
         echoln "[MP] Handshake aborted: $Trainer still nil after 10s wait. Will retry."
+        mp_log("NET: handshake aborted - $Trainer nil after wait") if defined?(mp_log)
         @state = STATE_DISCONNECTED
         close_socket
         sleep(@reconnect_delay)
@@ -136,6 +145,7 @@ module MP_NetworkManager
 
     rescue Errno::ECONNREFUSED
       echoln "[MP] Connection refused — is the server running on #{MP_ClientConfig::SERVER_IP}:#{MP_ClientConfig::SERVER_PORT}?"
+      mp_log("NET: connection refused") if defined?(mp_log)
       @state = STATE_DISCONNECTED
       sleep(@reconnect_delay)
       @reconnect_delay = [@reconnect_delay * MP_ClientConfig::RECONNECT_BACKOFF_MULTIPLIER,
@@ -143,6 +153,7 @@ module MP_NetworkManager
       close_socket
     rescue Errno::ETIMEDOUT, Errno::ENETUNREACH, SocketError => e
       echoln "[MP] Connection failed: #{e.class}: #{e.message}"
+      mp_log("NET: connection failed #{e.class}: #{e.message}") if defined?(mp_log)
       @state = STATE_DISCONNECTED
       sleep(@reconnect_delay)
       @reconnect_delay = [@reconnect_delay * MP_ClientConfig::RECONNECT_BACKOFF_MULTIPLIER,
@@ -150,6 +161,7 @@ module MP_NetworkManager
       close_socket
     rescue => e
       echoln "[MP] Unexpected connect error: #{e.class}: #{e.message}"
+      mp_log("NET: unexpected connect error #{e.class}: #{e.message}") if defined?(mp_log)
       @state = STATE_DISCONNECTED
       sleep(@reconnect_delay)
       close_socket
@@ -178,6 +190,7 @@ module MP_NetworkManager
       outfit:  outfit
     })
     echoln "[MP] Sending handshake as '#{$Trainer.name}' version #{version}"
+    mp_log("NET: sending handshake for #{$Trainer.name} v#{version}") if defined?(mp_log)
     send_raw(packet)
   end
 

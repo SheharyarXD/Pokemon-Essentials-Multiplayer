@@ -1,0 +1,20 @@
+=== MP Debug Log 2026-05-10 19:29:13 +0500 ===
+[19:29:13] DIAG: Multiplayer plugin loaded
+[19:29:13] DIAG: Ruby version = 3.0.0
+[19:29:13] DIAG: TCPSocket defined? NO
+[19:29:13] DIAG: MP_ClientConfig defined? NO
+[19:29:13] DIAG: MP_NetworkManager defined? NO
+[19:29:13] DIAG: Scene_Map diagnostic hook installed
+[19:29:24] HOOK: Scene_Map#main start hook fired
+[19:29:24] NET: start called
+[19:29:24] DIAG: Scene_Map#main entered
+[19:29:24] DIAG: $Trainer = XD
+[19:29:24] DIAG: $game_map = 22
+[19:29:24] NET: TCP connected to 127.0.0.1:9000
+[19:29:24] DIAG: $game_player = SET
+[19:29:24] NET: sending handshake for XD v7.4.2
+[19:29:24] DIAG: $mp_network_started = true
+[19:29:39] NET: TCP connected to 127.0.0.1:9000
+[19:29:39] NET: sending handshake for XD v7.4.2
+[19:29:54] NET: TCP connected to 127.0.0.1:9000
+[19:29:54] NET: sending handshake for XD v7.4.2

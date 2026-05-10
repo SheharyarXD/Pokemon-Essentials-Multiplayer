@@ -24,13 +24,16 @@ end
 # start the network connection. update fires every frame; main fires once on
 # scene entry and runs until scene exits.
 class Scene_Map
-  alias_method :mp_orig_main, :main
+  unless method_defined?(:mp_orig_main)
+    alias_method :mp_orig_main, :main
+  end
   def main
     # Start multiplayer when entering the map scene (new game OR loaded save)
     unless $mp_network_started
       $mp_network_started = true
       begin
         echoln "[MP] Scene_Map#main entered — starting network..."
+        mp_log("HOOK: Scene_Map#main start hook fired") if defined?(mp_log)
         MP_NetworkManager.start
         MP_OverworldManager.init
       rescue => e
@@ -46,7 +49,9 @@ class Scene_Map
     MP_OverworldManager.dispose rescue nil
   end
 
-  alias_method :mp_orig_update, :update
+  unless method_defined?(:mp_orig_update)
+    alias_method :mp_orig_update, :update
+  end
   def update
     mp_orig_update
     return unless defined?(MP_NetworkManager)
@@ -58,7 +63,9 @@ class Scene_Map
     echoln "[MP] Scene_Map#update error: #{e.class}" if $DEBUG
   end
 
-  alias_method :mp_orig_transfer_player, :transfer_player
+  unless method_defined?(:mp_orig_transfer_player)
+    alias_method :mp_orig_transfer_player, :transfer_player
+  end
   def transfer_player(cancel_vehicles = true)
     result = mp_orig_transfer_player(cancel_vehicles)
     if defined?(MP_NetworkManager) && MP_NetworkManager.connected?
@@ -76,7 +83,9 @@ end
 
 # ── Hook: Game_Player#move_generic ────────────────────────────────────────────
 class Game_Player
-  alias_method :mp_orig_move_generic, :move_generic
+  unless method_defined?(:mp_orig_move_generic)
+    alias_method :mp_orig_move_generic, :move_generic
+  end
   def move_generic(dir, turn_enabled = true)
     result = mp_orig_move_generic(dir, turn_enabled)
     if defined?(MP_NetworkManager) && MP_NetworkManager.connected?
