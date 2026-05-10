@@ -1,39 +1,30 @@
-=== MP Debug Log 2026-05-10 20:14:53 +0500 ===
-[20:14:53] DIAG: Multiplayer plugin loaded
-[20:14:53] DIAG: Ruby version = 3.0.0
-[20:14:53] DIAG: TCPSocket defined? NO
-[20:14:53] DIAG: MP_ClientConfig defined? NO
-[20:14:53] DIAG: MP_NetworkManager defined? NO
-[20:14:53] DIAG: Scene_Map diagnostic hook installed
-[20:15:12] HOOK: Scene_Map#main start hook fired
-[20:15:12] NET: start called
-[20:15:12] DIAG: Scene_Map#main entered
-[20:15:12] DIAG: $Trainer = aaaaaaaaaa
-[20:15:12] DIAG: $game_map = 2
-[20:15:12] DIAG: $game_player = SET
-[20:15:12] NET: TCP connected to 127.0.0.1:9000
-[20:15:12] DIAG: $mp_network_started = true
-[20:15:12] NET: sending handshake for aaaaaaaaaa v7.4.2
-[20:15:20] HOOK: Scene_Map#main start hook fired
-[20:15:20] NET: start called
-[20:15:20] DIAG: Scene_Map#main entered
-[20:15:20] DIAG: $Trainer = XD
-[20:15:20] NET: TCP connected to 127.0.0.1:9000
-[20:15:20] DIAG: $game_map = 2
-[20:15:20] NET: sending handshake for XD v7.4.2
-[20:15:20] DIAG: $game_player = SET
-[20:15:20] DIAG: $mp_network_started = true
-[20:15:27] NET: TCP connected to 127.0.0.1:9000
-[20:15:27] NET: sending handshake for aaaaaaaaaa v7.4.2
-[20:15:35] NET: TCP connected to 127.0.0.1:9000
-[20:15:35] NET: sending handshake for XD v7.4.2
-[20:15:42] NET: TCP connected to 127.0.0.1:9000
-[20:15:44] NET: sending handshake for aaaaaaaaaa v7.4.2
-[20:15:50] NET: TCP connected to 127.0.0.1:9000
-[20:15:50] NET: sending handshake for XD v7.4.2
-[20:15:58] NET: TCP connected to 127.0.0.1:9000
-[20:15:58] NET: sending handshake for aaaaaaaaaa v7.4.2
-[20:16:05] NET: TCP connected to 127.0.0.1:9000
-[20:16:05] NET: sending handshake for XD v7.4.2
-[20:16:08] DIAG: Scene_Map#main exited
-[20:16:17] DIAG: Scene_Map#main exited
+=== MP Debug Log 2026-05-10 21:17:11 +0500 ===
+[21:17:11] DIAG: Multiplayer plugin loaded
+[21:17:11] DIAG: Ruby version = 3.0.0
+[21:17:11] DIAG: TCPSocket defined? NO
+[21:17:11] DIAG: MP_ClientConfig defined? NO
+[21:17:11] DIAG: MP_NetworkManager defined? NO
+[21:17:11] DIAG: Scene_Map diagnostic hook installed
+[21:17:11] NET: TCP connected to 127.0.0.1:9000
+[21:17:11] NET: sending handshake for aaaaaaaaaa v7.4.2
+[21:17:25] HOOK: Scene_Map#main start hook fired
+[21:17:25] NET: start called
+[21:17:25] DIAG: Scene_Map#main entered
+[21:17:25] DIAG: $Trainer = XD
+[21:17:25] DIAG: $game_map = 2
+[21:17:25] NET: TCP connected to 127.0.0.1:9000
+[21:17:25] DIAG: $game_player = SET
+[21:17:25] NET: sending handshake for XD v7.4.2
+[21:17:25] DIAG: $mp_network_started = true
+[21:17:40] NET: TCP connected to 127.0.0.1:9000
+[21:17:42] NET: sending handshake for XD v7.4.2
+[21:17:55] NET: TCP connected to 127.0.0.1:9000
+[21:17:55] NET: sending handshake for XD v7.4.2
+[21:18:10] NET: TCP connected to 127.0.0.1:9000
+[21:18:11] NET: sending handshake for XD v7.4.2
+[21:18:25] NET: TCP connected to 127.0.0.1:9000
+[21:18:26] NET: sending handshake for XD v7.4.2
+[21:18:41] NET: TCP connected to 127.0.0.1:9000
+[21:18:41] NET: sending handshake for XD v7.4.2
+[21:18:56] NET: TCP connected to 127.0.0.1:9000
+[21:18:56] NET: sending handshake for XD v7.4.2

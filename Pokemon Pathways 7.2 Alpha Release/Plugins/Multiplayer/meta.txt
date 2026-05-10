@@ -1,22 +1,3 @@
 Name         = Multiplayer
-Version      = 1.2.0
+Version      = 1.1.0
 Credits      = Pokemon Pathways Dev Team
-Requires     = Pokemon Essentials v19.1
-
-Changes in v1.2.0:
-  - Fixed all crash bugs from network-thread UI calls
-  - Added thread-safe main-thread marshalling
-  - Fixed double position sending (was 30 pkt/s, now ~10 pkt/s)
-  - Fixed map change triple-send
-  - Fixed jerky movement (set_target double-call)
-  - Fixed sprite viewport crash
-  - Fixed busy-wait CPU burn (1000Hz -> 60Hz)
-  - Fixed memory leak in battle hooks
-  - Full Pokemon trade serialization (IVs, EVs, moves, nature, ability)
-  - Fixed dead code in mp_data.rb (removed)
-  - Fixed integer overflow in position counter
-  - Added max remote player cap (32)
-  - Added heartbeat timeout detection
-  - Added graceful disconnect on exit
-  - Fixed chat input conflicting with game controls
-  - Fixed double-dispose crash in sprite cleanup
