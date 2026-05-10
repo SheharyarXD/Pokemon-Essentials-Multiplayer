@@ -1,6 +1,10 @@
 #===============================================================================
 #  Pokemon Pathways Multiplayer - Chat Service
-#  Handles CHAT_MESSAGE (map broadcast), CHAT_WHISPER (private), CHAT_SYSTEM
+#
+#  Handles:
+#   CHAT_MESSAGE  -> broadcast to all players on the same map
+#   CHAT_WHISPER  -> private message between two players (with sender echo)
+#   CHAT_SYSTEM   -> server-initiated system messages (no inbound handler)
 #===============================================================================
 
 require_relative '../config'
@@ -15,87 +19,92 @@ class ChatService
     return unless client.authenticated
 
     case packet.type
-    when MP_PacketType::CHAT_MESSAGE
-      handle_chat_message(client, packet)
-    when MP_PacketType::CHAT_WHISPER
-      handle_whisper(client, packet)
+    when MP_PacketType::CHAT_MESSAGE then handle_chat_message(client, packet)
+    when MP_PacketType::CHAT_WHISPER then handle_whisper(client, packet)
     end
   end
 
+  # ─── Map broadcast ────────────────────────────────────────────────────────────
+
   def handle_chat_message(client, packet)
+    return unless client.map_id   # must be on a map to chat
+
     message = packet.payload["message"]
-    return unless message
+    return unless message.is_a?(String)
     return if message.strip.empty?
-    return if message.length > 200
 
-    # Sanitize message
-    sanitized = sanitize_message(message)
+    sanitized = sanitize_message(message, MP_ServerConfig::MAX_CHAT_LENGTH)
 
-    broadcast_packet = MP_Packet.new(MP_PacketType::CHAT_MESSAGE, {
-      sender: client.player_name,
-      sender_id: client.id,
-      message: sanitized,
-      map_id: client.map_id,
-      timestamp: Time.now.to_i
-    })
+    @server.broadcast_to_map(client.map_id,
+      MP_Packet.new(MP_PacketType::CHAT_MESSAGE, {
+        "sender"    => client.player_name,
+        "sender_id" => client.id,
+        "message"   => sanitized,
+        "map_id"    => client.map_id,
+        "timestamp" => Time.now.to_i
+      })
+    )
 
-    # Broadcast to all players on the same map
-    @server.broadcast_to_map(client.map_id, broadcast_packet)
-
-    puts "[CHAT] [#{client.map_id}] #{client.player_name}: #{sanitized}"
+    puts "[CHAT] [map:#{client.map_id}] #{client.player_name}: #{sanitized}"
   end
 
+  # ─── Whisper ─────────────────────────────────────────────────────────────────
+
   def handle_whisper(client, packet)
-    message = packet.payload["message"]
+    message     = packet.payload["message"]
     target_name = packet.payload["target"]
-    return unless message && target_name
+    return unless message.is_a?(String) && target_name.is_a?(String)
     return if message.strip.empty?
-    return if message.length > 500
 
     target = @server.clients.find_by_name(target_name)
     unless target
       client.send_packet(MP_Packet.new(MP_PacketType::CHAT_SYSTEM, {
-        message: "Player '#{target_name}' is not online."
+        "message" => "Player '#{target_name}' is not online."
       }))
       return
     end
 
-    sanitized = sanitize_message(message)
+    sanitized = sanitize_message(message, MP_ServerConfig::MAX_WHISPER_LENGTH)
+    ts        = Time.now.to_i
 
-    # Send to target
-    whisper_packet = MP_Packet.new(MP_PacketType::CHAT_WHISPER, {
-      sender: client.player_name,
-      sender_id: client.id,
-      message: sanitized,
-      timestamp: Time.now.to_i
+    whisper_pkt = MP_Packet.new(MP_PacketType::CHAT_WHISPER, {
+      "sender"    => client.player_name,
+      "sender_id" => client.id,
+      "message"   => sanitized,
+      "timestamp" => ts
     })
-    target.send_packet(whisper_packet)
 
-    # Echo back to sender
+    target.send_packet(whisper_pkt)
+
+    # Echo back to sender with a flag so the client can render it differently
     client.send_packet(MP_Packet.new(MP_PacketType::CHAT_WHISPER, {
-      sender: client.player_name,
-      sender_id: client.id,
-      message: sanitized,
-      timestamp: Time.now.to_i,
-      echo: true
+      "sender"    => client.player_name,
+      "sender_id" => client.id,
+      "to"        => target_name,
+      "message"   => sanitized,
+      "timestamp" => ts,
+      "echo"      => true
     }))
 
     puts "[WHISPER] #{client.player_name} -> #{target_name}: #{sanitized}"
   end
 
+  # ─── Server-initiated system message ─────────────────────────────────────────
+
   def send_system_message(client, message)
     client.send_packet(MP_Packet.new(MP_PacketType::CHAT_SYSTEM, {
-      message: message
+      "message" => message
     }))
   end
 
   private
 
-  def sanitize_message(message)
-    # Remove control characters
-    message.gsub(/[\x00-\x08\x0B\x0C\x0E-\x1F]/, '')
-      .gsub(/</, '&lt;')
-      .gsub(/>/, '&gt;')
-      .strip[0, 200]
+  def sanitize_message(message, max_len)
+    message
+      .gsub(/[\x00-\x08\x0B\x0C\x0E-\x1F]/, '')  # strip control characters
+      .gsub('<', '&lt;')
+      .gsub('>', '&gt;')
+      .strip
+      .slice(0, max_len)
   end
 end
