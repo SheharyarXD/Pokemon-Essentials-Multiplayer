@@ -5,7 +5,7 @@
 
 module MP_ServerConfig
   # Network settings
-  HOST           = "0.0.0.0"          # Listen on all interfaces (was 127.0.0.1 = localhost only)
+  HOST           = "127.0.0.1"          # Listen on all interfaces (was 127.0.0.1 = localhost only)
   PORT           = 9000
   MAX_CLIENTS    = 100
 
