@@ -1,8 +1,11 @@
 #===============================================================================
-#  Pokemon Pathways Multiplayer Plugin - Version Manager
-#  Sends game version in handshake; handles rejection with a user message.
-#  NOTE: If version mismatch, update REQUIRED_VERSION in server/version_check.rb
-#        to match whatever Settings::GAME_VERSION returns in your game.
+#  Pokemon Pathways Multiplayer Client - Version Manager
+#
+#  Reads game version from Settings::GAME_VERSION and handles version-mismatch
+#  ERROR packets from the server with a clear user-facing message.
+#
+#  NOTE: If rejected, update REQUIRED_VERSION in server/version_check.rb to
+#  match whatever Settings::GAME_VERSION returns in your game build.
 #===============================================================================
 
 module MP_VersionManager
@@ -12,19 +15,24 @@ module MP_VersionManager
     Settings::GAME_VERSION.to_s rescue "7.4.2"
   end
 
-  def on_version_rejected(required_version)
-    msg = "Multiplayer version mismatch!\nYour game: #{current_version}\nServer needs: #{required_version || 'unknown'}\n\nFix: open server/version_check.rb and set REQUIRED_VERSION = \"#{current_version}\""
-    echoln "[MP][Version] #{msg}"
-  end
-
-  def on_error_packet(message)
-    if message.include?("Version mismatch") || message.include?("version")
-      required = message.match(/requires?\s+([\d.]+)/i)&.captures&.first
-      on_version_rejected(required)
-    end
+  def handle_error(message)
+    return unless message.include?("Version mismatch") || message.include?("version")
+    required = message.match(/requires?\s+v?([\d.]+)/i)&.captures&.first || "unknown"
+    user_msg = [
+      "Multiplayer version mismatch!",
+      "Your game : #{current_version}",
+      "Server    : #{required}",
+      "",
+      "Ask the server admin to update server/version_check.rb,",
+      "or update your game client."
+    ].join("\n")
+    mp_log("VERSION: #{user_msg}") if defined?(mp_log)
+    # pbMessage is deferred — this runs on main thread via error handler
+    pbMessage(user_msg) rescue nil
   end
 end
 
+# Register after MP_NetworkManager is defined (happens at load time before hooks run)
 MP_NetworkManager.on_error do |msg|
-  MP_VersionManager.on_error_packet(msg)
+  MP_VersionManager.handle_error(msg)
 end

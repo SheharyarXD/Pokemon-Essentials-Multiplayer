@@ -1,165 +1,161 @@
 #===============================================================================
-#  Pokemon Pathways Multiplayer Plugin - Remote Player Character
-#  Game_Character subclass that mirrors remote player movement
-#  Includes party display (first Pokemon species + level above sprite)
+#  Pokemon Pathways Multiplayer Client - Remote Player Character
+#
+#  Subclass of Game_Character that the existing Spriteset_Map can render like
+#  any other map character. Reads position from a RemotePlayerData instance
+#  and applies smoothed interpolation each frame.
+#
+#  FIXES vs original:
+#   * CONSTRUCTOR: super() with no arguments. Original called super($game_map)
+#     but Game_Character#initialize in PE v19.1 takes no arguments.
+#   * INTERPOLATION: now delegates to RemotePlayerData#update_interpolation which
+#     snapshots from current real_x/real_y, preventing backwards snapping.
+#   * NAME SPRITE VIEWPORT: creates name sprites on an explicit viewport with
+#     high Z so they appear above tiles but below menus.
+#   * No Sprite/Bitmap creation happens in initialize; create_name_sprite must
+#     be called explicitly from the main thread only.
 #===============================================================================
 
 class MP_Game_RemotePlayer < Game_Character
-  attr_accessor :mp_id, :mp_name, :party_display, :name_sprite
-  attr_reader :target_x, :target_y, :interpolating
+  attr_reader   :mp_id, :mp_name, :data
+  attr_accessor :mp_sprite  # back-reference to our Sprite_Character, set by overworld
 
-  def initialize(mp_id, name, map_id, x, y, dir, sprite = "", outfit = 0)
-    super($game_map)
-    @mp_id = mp_id
-    @mp_name = name
-    @party_display = nil
-    @through = true
-    @walk_anime = true
-    @step_anime = false
-    @transparent = false
-    @opacity = 255
+  def initialize(data)
+    super()   # FIX: no arguments - Game_Character#initialize takes none in PE v19.1
+    @data    = data            # RemotePlayerData instance
+    @mp_id   = data.id
+    @mp_name = data.name
 
-    # Set initial position
-    @x = x
-    @y = y
-    @real_x = x * Game_Map::REAL_RES_X
-    @real_y = y * Game_Map::REAL_RES_Y
-    @direction = dir
-    @original_direction = dir
+    # Game_Character configuration
+    @through        = true    # don't block player movement
+    @walk_anime     = true
+    @step_anime     = false
+    @transparent    = false
+    @opacity        = 255
+    @move_speed     = 4
 
-    # Set sprite
-    if sprite && !sprite.empty?
-      @character_name = sprite
-    else
-      @character_name = "boy_bike" # default
-    end
-    @character_hue = 0
+    # Sync initial position from data
+    @x          = data.x
+    @y          = data.y
+    @real_x     = data.real_x.to_i
+    @real_y     = data.real_y.to_i
+    @direction  = data.direction
+    @original_direction = data.direction
 
-    # Interpolation state
-    @target_x = x
-    @target_y = y
-    @interpolating = false
-    @interpolate_start = 0
-    @interpolate_duration = MP_ClientConfig::INTERPOLATION_DURATION
-    @last_update = Time.now.to_f * 1000
+    set_character_graphic(data.sprite_name)
 
-    # Name display sprite
-    @name_sprite = nil
+    # Name label sprite (nil until create_name_sprite is called)
+    @name_sprite    = nil
+    @name_viewport  = nil
   end
+
+  # ─── Frame update ──────────────────────────────────────────────────────────
 
   def update
-    super
-    update_interpolation if MP_ClientConfig::INTERPOLATION_ENABLED
-    update_name_sprite if @name_sprite
-  end
+    # Advance interpolation in RemotePlayerData
+    @data.update_interpolation if MP_ClientConfig::INTERPOLATION_ENABLED
 
-  def set_target(nx, ny)
-    return if nx == @x && ny == @y
+    # Mirror real_x/real_y from data to self (Game_Character uses these for rendering)
+    @real_x     = @data.real_x.to_i
+    @real_y     = @data.real_y.to_i
+    @x          = @data.x
+    @y          = @data.y
+    @direction  = @data.direction
 
-    @target_x = nx
-    @target_y = ny
-    @interpolating = true
-    @interpolate_start = Time.now.to_f * 1000
-    @last_update = @interpolate_start
-  end
-
-  def update_interpolation
-    return unless @interpolating
-
-    now = Time.now.to_f * 1000
-    elapsed = now - @interpolate_start
-
-    if elapsed >= @interpolate_duration
-      @x = @target_x
-      @y = @target_y
-      @real_x = @x * Game_Map::REAL_RES_X
-      @real_y = @y * Game_Map::REAL_RES_Y
-      @interpolating = false
-    else
-      t = elapsed / @interpolate_duration
-      t = t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t)
-      current_x = lerp(@x, @target_x, t)
-      current_y = lerp(@y, @target_y, t)
-      @real_x = current_x * Game_Map::REAL_RES_X
-      @real_y = current_y * Game_Map::REAL_RES_Y
+    # Animate walk cycle when interpolating
+    if @data.interpolating
+      @pattern    = (@pattern + 1) % 4 if Graphics.frame_count % 8 == 0
     end
+
+    update_name_sprite_position
+    super
+  end
+
+  # ─── Appearance setters (called from main thread) ──────────────────────────
+
+  def set_character_graphic(name)
+    return if name.nil?
+    n = name.to_s
+    n = "boy_bike" if n.empty?
+    @character_name = n
+    @character_hue  = 0
   end
 
   def set_direction(dir)
-    @direction = dir
-    @original_direction = dir
+    @direction = dir.to_i
+    @original_direction = @direction
     @stop_count = 0
+    @data.direction = @direction
   end
 
-  def set_sprite(sprite, outfit_val = 0)
-    return if sprite.nil? || sprite.empty?
-    @character_name = sprite
-    @outfit = outfit_val
-  end
+  # ─── Name sprite ───────────────────────────────────────────────────────────
 
-  def set_party_display(display)
-    @party_display = display
-  end
-
-  def distance_to_player
-    return 999 unless $game_player
-    dx = @x - $game_player.x
-    dy = @y - $game_player.y
-    Math.sqrt(dx * dx + dy * dy)
-  end
-
-  def should_cull?
-    distance_to_player > MP_ClientConfig::VISIBLE_DISTANCE
-  end
-
-  def dispose_name_sprite
-    if @name_sprite
-      @name_sprite.bitmap.dispose if @name_sprite.bitmap
-      @name_sprite.dispose
-      @name_sprite = nil
-    end
-  end
-
-  def update_name_sprite
-    return unless @name_sprite
-    @name_sprite.x = screen_x
-    @name_sprite.y = screen_y - 20
-    @name_sprite.z = screen_z + 100
-    @name_sprite.visible = !@transparent
-  end
-
-  def create_name_bitmap
+  # Must be called from the main (game loop) thread.
+  def create_name_sprite(viewport = nil)
     dispose_name_sprite
     return unless @mp_name
 
-    bitmap = Bitmap.new(160, 32)
-    bitmap.font.size = 16
-    bitmap.font.color = Color.new(255, 255, 255)
-    bitmap.draw_text(0, 0, 160, 20, @mp_name, 1)
+    width  = 160
+    height = 36
 
-    if @party_display
-      species_name = @party_display[:species] || @party_display["species"]
-      level = @party_display[:level] || @party_display["level"]
-      if species_name && level
-        info_text = "Lv.#{level} #{species_name}"
-        bitmap.font.size = 12
+    bitmap = Bitmap.new(width, height)
+
+    # Player name
+    bitmap.font.size  = 16
+    bitmap.font.bold  = true
+    bitmap.font.color = Color.new(255, 255, 255)
+    shadow_color      = Color.new(0, 0, 0, 180)
+    bitmap.font.color = shadow_color
+    bitmap.draw_text(1, 1, width, 20, @mp_name, 1)
+    bitmap.font.color = Color.new(255, 255, 255)
+    bitmap.draw_text(0, 0, width, 20, @mp_name, 1)
+
+    # Party display (first Pokémon)
+    pd = @data.party_display
+    if pd
+      species = pd["species"] || pd[:species]
+      level   = pd["level"]   || pd[:level]
+      if species && level
+        bitmap.font.size  = 12
+        bitmap.font.bold  = false
         bitmap.font.color = Color.new(200, 220, 255)
-        bitmap.draw_text(0, 16, 160, 14, info_text, 1)
+        bitmap.draw_text(0, 20, width, 16, "Lv.#{level} #{species}", 1)
       end
     end
 
-    @name_sprite = Sprite.new
+    # FIX: use supplied viewport (passed in from overworld manager which has
+    # the correct map viewport). Fallback to nil (default/full-screen) if none.
+    @name_sprite    = Sprite.new(viewport)
     @name_sprite.bitmap = bitmap
-    @name_sprite.ox = 80
-    @name_sprite.oy = 16
-    @name_sprite.x = screen_x
-    @name_sprite.y = screen_y - 20
-    @name_sprite.z = screen_z + 100
+    @name_sprite.ox = width / 2
+    @name_sprite.oy = height
+    @name_sprite.z  = 5000   # above tiles, below menus
   end
 
-  private
+  def dispose_name_sprite
+    if @name_sprite && !@name_sprite.disposed?
+      @name_sprite.bitmap.dispose if @name_sprite.bitmap && !@name_sprite.bitmap.disposed?
+      @name_sprite.dispose
+    end
+    @name_sprite = nil
+  end
 
-  def lerp(a, b, t)
-    a + (b - a) * t
+  def update_name_sprite_position
+    return unless @name_sprite && !@name_sprite.disposed?
+    @name_sprite.x       = screen_x
+    @name_sprite.y       = screen_y - 48
+    @name_sprite.visible = !@transparent && @data.visible
+  end
+
+  # Rebuild the name label (e.g. after party update).
+  def refresh_name_sprite(viewport = nil)
+    vp = (viewport || (@name_sprite&.viewport))
+    create_name_sprite(vp)
+  end
+
+  # ─── Cleanup ───────────────────────────────────────────────────────────────
+
+  def dispose
+    dispose_name_sprite
   end
 end
