@@ -1,0 +1,4 @@
+Name         = Pokémon Legends: Arceus Expansion (for Gen 8 Project in v19.1)
+Version      = 1.0
+Link         = https://www.pokecommunity.com/showthread.php?t=465592
+Credits      = PorousMist, StCooler, curryofthepast

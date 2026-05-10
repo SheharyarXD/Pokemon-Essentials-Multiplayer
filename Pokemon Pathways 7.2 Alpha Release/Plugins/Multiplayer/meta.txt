@@ -1,0 +1,5 @@
+Name         = Multiplayer
+Version      = 1.0.0
+Credits      = Pokemon Pathways Dev Team
+Link         = https://pokemonpathways.game
+Scripts      = 001_mp_config.rb, 002_mp_packet.rb, 003_mp_data.rb, 004_mp_network.rb, 005_mp_remote_player.rb, 006_mp_remote_sprite.rb, 007_mp_overworld.rb, 008_mp_hooks.rb, 009_mp_battle.rb, 010_mp_trade.rb, 011_mp_chat.rb, 012_mp_version.rb

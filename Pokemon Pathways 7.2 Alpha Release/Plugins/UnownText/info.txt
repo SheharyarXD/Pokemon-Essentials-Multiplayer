@@ -1,0 +1,52 @@
+# USAGE
+
+The images are in Graphics/Unown/unown.png and Graphics/Unown/unown_bg.png. They are a long strip of images. They are default 32x32. 
+
+If you want to display some unown text, use the following script in your Event:
+
+pb_unowntext("Unown Text")
+
+It can handle 14 characters of text at a time. It defaults to using left aligned text. You can also use ~ as newline characters.
+
+If you want to display a panel, use the following script in your Event:
+pb_unownscene("Unown Text")
+
+Note that this scene is only 12 characters wide and is center aligned so keep that in mind.
+
+Remember that Unown only have characters A-Z and ! and ?. The other characters display as spaces.
+
+You can also have a version with specified alignment. Here are the alignment values:
+pb_unowntext("Unown Text",0); // left align
+pb_unowntext("Unown Text",1); // center align
+pb_unowntext("Unown Text",2); // right align
+
+Finally, you can have a background too. This will display the text like in Pokemon Crystal in the Ruins of Alph.
+pb_unowntextbg("Unown Text") // left aligned background text
+pb_unowntextbg("Unown Text",1) // center aligned background text
+
+# MODIFYING
+
+Essentially, this tool is a monospace bitmap sprite text generator, which could be useful for a lot of things.
+You can make basic modifications to extend the usability of the script. I'm not the best Ruby programemr either, so feel free to improve upon my code and make suggestions.
+
+The script assumes a sprite size of 32x32. You can change this size with the following constant:
+SPRITESIZE=16
+
+Similarly, you can modify the number of sprites on one line with this:
+MAXLINELENGTH=24
+
+If you add new sprites, make sure you update this variable. It's so that it displays blank spaces properly.
+SPRITECOUNT=30
+
+The code that determines which characters are printed is in the function setSprite(j) (line 148).
+You can add custom characters this way.
+
+The arrangement of the text actually occurs when the variable text is set. You should set your other variables before that. I said I wasn't a good programmer!
+
+# CREDITS
+Code: PunishedFelix
+Sprites: Pokemon Crystal Version
+
+Please add me to your credits if you use this asset. Feel free to use as much as you like.
+
+I do not hold any responsibility for messing up your game. Even though this asset doesn't modify other vanilla components, always remember to backup!
