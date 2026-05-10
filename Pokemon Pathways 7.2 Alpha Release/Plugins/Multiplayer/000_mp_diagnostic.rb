@@ -15,10 +15,27 @@ def mp_log(msg)
   end
 end
 
+# Full exception + backtrace (remote player / sprite failures, hooks, etc.)
+def mp_log_exception(prefix, err)
+  return unless err
+  mp_log("#{prefix} #{err.class}: #{err.message}")
+  mp_log(err.backtrace.join("\n")) if err.backtrace
+rescue
+  nil
+end
+
 # Rotate log on startup
 begin
   File.open("mp_debug.txt", "w") { |f| f.puts("=== MP Debug Log #{Time.now} ===") }
 rescue
+  nil
+end
+
+# MKXP-Z loads plugins before Ruby's socket stdlib in some builds — load early so
+# diagnostics and later scripts see TCPSocket.
+begin
+  require "socket"
+rescue LoadError
   nil
 end
 

@@ -45,11 +45,22 @@ module MP_ChatOverlay
     mp_log("CHAT: initialized") if defined?(mp_log)
   end
 
-  def dispose
+  def leave_scene_map
     dispose_sprites
     @messages.clear
+    mp_log("CHAT: leave_scene_map") if defined?(mp_log)
+  end
+
+  def dispose
+    leave_scene_map
     @initialized = false
     mp_log("CHAT: disposed") if defined?(mp_log)
+  end
+
+  def mp_chat_diag?
+    MP_ClientConfig::NETWORK_DIAGNOSTICS
+  rescue NameError
+    false
   end
 
   def dispose_sprites

@@ -106,6 +106,12 @@ class GameServer
   def game_loop
     tick_duration = MP_ServerConfig::TICK_DURATION
     while @running
+      if defined?($mp_server_shutdown_requested) && $mp_server_shutdown_requested
+        puts "\n[SERVER] Shutdown flag set — stopping cleanly..."
+        stop
+        break
+      end
+
       tick_start = Time.now
 
       @tick_count += 1

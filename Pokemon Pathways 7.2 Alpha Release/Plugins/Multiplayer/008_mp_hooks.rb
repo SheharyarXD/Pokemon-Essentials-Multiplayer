@@ -2,7 +2,8 @@
 #  Pokemon Pathways Multiplayer Client - Core Game Hooks
 #
 #  Hooks into three PE methods:
-#    Scene_Map#main          — start/stop network on scene enter/exit
+#    Scene_Map#main          — start network + subsystems once per game session;
+#                              on exit, tear down map sprites only (socket stays up).
 #    Scene_Map#update        — pump network I/O every frame
 #    Scene_Map#transfer_player — send MAP_CHANGE on map transitions
 #
@@ -20,6 +21,8 @@
 #   * VIEWPORT: after spriteset is created, pass the viewport to OverworldManager.
 #   * CHAT / BATTLE MANAGERS: initialized here inside Scene_Map#main so they
 #     can register their callbacks after MP_NetworkManager.start.
+#   * SESSION SINGLETON: $mp_multiplayer_core_ready ensures one net thread and
+#     no duplicate handler registration when reopening the map after menus.
 #===============================================================================
 
 module MP_Hooks
@@ -42,39 +45,40 @@ class Scene_Map
   end
 
   def main
-    unless $mp_network_started
-      $mp_network_started = true
+    # One game session = one net thread + one set of packet handlers. Re-entering
+    # Scene_Map (menus, battles) must NOT call start again or dispose callbacks.
+    unless $mp_multiplayer_core_ready
+      $mp_multiplayer_core_ready = true
       begin
-        mp_log("HOOK: Scene_Map#main → starting MP") if defined?(mp_log)
+        mp_log("HOOK: Scene_Map#main → multiplayer core init (once per session)") if defined?(mp_log)
 
-        # Start network first (sets up state machine; doesn't connect yet)
         MP_NetworkManager.start
 
-        # Register top-level disconnect handler to clear remote players
         MP_NetworkManager.on_disconnect do |reason|
           mp_log("HOOK: disconnected (#{reason})") if defined?(mp_log)
           MP_OverworldManager.on_disconnect rescue nil
         end
 
-        # Init subsystems — these register their packet handlers
         MP_OverworldManager.init
         MP_ChatOverlay.init
         MP_BattleManager.init
         MP_TradeManager.init
 
       rescue => e
-        mp_log("HOOK: startup error #{e.class}: #{e.message}") if defined?(mp_log)
+        mp_log_exception("HOOK: multiplayer core init", e) if defined?(mp_log_exception)
       end
     end
 
     mp_orig_main
 
   ensure
-    $mp_network_started = false
-    MP_NetworkManager.stop        rescue nil
-    MP_OverworldManager.dispose   rescue nil
-    MP_ChatOverlay.dispose        rescue nil
-    mp_log("HOOK: Scene_Map#main exiting") if defined?(mp_log)
+    begin
+      MP_OverworldManager.leave_scene_map
+      MP_ChatOverlay.leave_scene_map
+      mp_log("HOOK: Scene_Map#main exited (overworld/chat sprites cleared; network keeps running)") if defined?(mp_log)
+    rescue => e
+      mp_log_exception("HOOK: Scene_Map#main ensure", e) if defined?(mp_log_exception)
+    end
   end
 
   unless method_defined?(:mp_orig_update)
@@ -96,12 +100,21 @@ class Scene_Map
     return unless defined?(MP_NetworkManager)
 
     begin
-      # FIX: tick() = process_outgoing + dispatch_events (all on main thread)
+      # FIX: tick() = dispatch_events + process_outgoing (all on main thread)
       MP_NetworkManager.tick
+      if MP_ClientConfig::NETWORK_DIAG_F9_DUMP && MP_ClientConfig::NETWORK_DIAGNOSTICS
+        begin
+          if defined?(Input::F9) && Input.trigger?(Input::F9)
+            mp_log("MP_DIAG #{MP_NetworkManager.diagnostics_text}") if defined?(mp_log)
+          end
+        rescue StandardError
+          nil
+        end
+      end
       MP_OverworldManager.update if MP_NetworkManager.connected?
       MP_ChatOverlay.update      if MP_NetworkManager.connected?
     rescue => e
-      mp_log("HOOK: update error #{e.class}: #{e.message}") if defined?(mp_log)
+      mp_log_exception("HOOK: Scene_Map#update (multiplayer block)", e) if defined?(mp_log_exception)
     end
   end
 
@@ -122,14 +135,13 @@ class Scene_Map
           "direction" => $game_player.direction
         })
       rescue => e
-        mp_log("HOOK: transfer_player error #{e.class}: #{e.message}") if defined?(mp_log)
+        mp_log_exception("HOOK: transfer_player", e) if defined?(mp_log_exception)
       end
     end
     result
   end
 end
 
-# Global flag — false means network not yet started this scene session
-$mp_network_started = false
+$mp_multiplayer_core_ready = false unless defined?($mp_multiplayer_core_ready)
 
 MP_Hooks.install

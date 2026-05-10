@@ -28,7 +28,19 @@ module MP_ClientConfig
   INTERPOLATION_ENABLED        = true
   INTERPOLATION_DURATION       = 150   # ms (was 50ms - too fast, leaves gaps)
 
-  # ── Debug ───────────────────────────────────────────────────────────────────
+  # ── Heartbeat (must stay under server DISCONNECT_TIMEOUT; server is 15s) ───
+  CLIENT_HEARTBEAT_INTERVAL      = 3.0   # seconds between client-initiated pings
+  HEARTBEAT_WARN_AFTER           = 10.0  # diagnostic: warn if no server echo this long
+  SERVER_DISCONNECT_TIMEOUT_HINT = 15  # for log messages only (matches server default)
+
+  # ── Debug / diagnostics ───────────────────────────────────────────────────
   DEBUG_PACKETS  = false   # set true to log every packet to console
   DEBUG_MOVEMENT = false
+  # Thread state, queues, heartbeat age, map id — set false to silence mp_debug.txt
+  NETWORK_DIAGNOSTICS         = true
+  NETWORK_DIAG_TICK_INTERVAL  = 60     # frames between NET TICK lines (~1s at 60fps)
+  # If true, press F9 on the map once to log MP_NetworkManager.diagnostics_text
+  NETWORK_DIAG_F9_DUMP        = false
+  # PLAYER_MOVE lines while NETWORK_DIAGNOSTICS (still throttled inside network code)
+  NETWORK_DIAG_MOVEMENT_THROTTLE = 0.5  # seconds between PLAYER_MOVE SENT logs
 end

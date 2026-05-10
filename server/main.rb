@@ -27,17 +27,19 @@ puts "[SERVER] Ruby version : #{RUBY_VERSION}"
 puts "[SERVER] Server root  : #{SERVER_ROOT}"
 
 $game_server = GameServer.new
+$mp_server_shutdown_requested = false
 
-trap("SIGINT") do
-  puts "\n[SERVER] SIGINT received - shutting down..."
-  $game_server.stop
-  exit 0
-end
-
-trap("SIGTERM") do
-  puts "\n[SERVER] SIGTERM received - shutting down..."
-  $game_server.stop
-  exit 0
+# Trap context cannot safely call mutex/IO-heavy stop — only set a flag; the main
+# game loop thread performs disconnect_all and socket close (avoids ThreadError).
+["INT", "TERM"].each do |sig|
+  begin
+    trap(sig) do
+      $mp_server_shutdown_requested = true
+      STDERR.puts "\n[SERVER] #{sig} received — shutdown scheduled (finishing this tick)..."
+    end
+  rescue ArgumentError
+    # Unsupported signal name on this OS
+  end
 end
 
 begin
