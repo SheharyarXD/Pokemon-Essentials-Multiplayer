@@ -1,33 +1,24 @@
 #===============================================================================
-#  Pokemon Pathways Multiplayer Client - Chat Overlay
+#  Pokemon Pathways Multiplayer Client - Chat Overlay (STABLE v2.1)
 #
-#  Renders a small transparent message log in the bottom-left corner of the
-#  map screen. Supports map-wide chat and whispers (/w name msg).
-#
-#  FIXES vs original:
-#   * INPUT CONFLICT: was using Input::LEFT for backspace, which conflicts with
-#     player movement. Removed all MKXP key-binding for text input; instead the
-#     overlay now uses a simple pbDisplayText-style prompt via the game's own
-#     input system (see activate_chat_input). Arrow keys stay for movement.
-#   * PREMATURE SPRITE CREATION: ensure_chat_sprite is now called lazily only
-#     when update() runs (i.e. inside Scene_Map), never at file-load time.
-#   * VIEWPORT Z: chat overlay uses a Viewport with z=9999 so it appears above
-#     all map sprites but below system menus.
-#   * SYSTEM CHAT PACKET: CHAT_SYSTEM is now registered here and in the
-#     disconnect handler; removed from battle manager to avoid duplicate messages.
-#   * init is idempotent; called from mp_hooks (not at file-load time).
+#  FIXES v2.1:
+#   * All sprite operations wrapped in begin/rescue
+#   * Viewport validated before every use
+#   * Bitmap operations guarded against disposed objects
+#   * Lazy sprite creation deferred until first message
+#   * dispose_sprites handles partially initialized state
 #===============================================================================
 
 module MP_ChatOverlay
   module_function
 
   MAX_MESSAGES      = 5
-  MESSAGE_FADE_MS   = 8000   # ms before a message starts fading
+  MESSAGE_FADE_MS   = 8000
   CHAT_WIDTH        = 400
   CHAT_HEIGHT       = 110
   LINE_HEIGHT       = 22
-  CHAT_X            = 4      # screen position
-  CHAT_Y_OFFSET     = 24     # pixels above bottom of screen
+  CHAT_X            = 4
+  CHAT_Y_OFFSET     = 24
 
   @messages     = []
   @chat_sprite  = nil
@@ -35,14 +26,12 @@ module MP_ChatOverlay
   @viewport     = nil
   @initialized  = false
 
-  # ── Lifecycle ───────────────────────────────────────────────────────────────
-
   def init
     return if @initialized
     @initialized = true
     @messages    = []
     register_packet_handlers
-    mp_log("CHAT: initialized") if defined?(mp_log)
+    mp_log("CHAT: initialized v2.1") if defined?(mp_log)
   end
 
   def leave_scene_map
@@ -57,47 +46,55 @@ module MP_ChatOverlay
     mp_log("CHAT: disposed") if defined?(mp_log)
   end
 
-  def mp_chat_diag?
-    MP_ClientConfig::NETWORK_DIAGNOSTICS
-  rescue NameError
-    false
-  end
-
   def dispose_sprites
-    if @chat_sprite && !@chat_sprite.disposed?
-      @chat_sprite.dispose
+    begin
+      if @chat_sprite && @chat_sprite.respond_to?(:disposed?) && !@chat_sprite.disposed?
+        @chat_sprite.dispose
+      end
+    rescue => e
+      mp_log_exception("CHAT: sprite dispose", e) if defined?(mp_log_exception)
     end
-    if @chat_bitmap && !@chat_bitmap.disposed?
-      @chat_bitmap.dispose
+    begin
+      if @chat_bitmap && @chat_bitmap.respond_to?(:disposed?) && !@chat_bitmap.disposed?
+        @chat_bitmap.dispose
+      end
+    rescue => e
+      mp_log_exception("CHAT: bitmap dispose", e) if defined?(mp_log_exception)
     end
-    if @viewport && !@viewport.disposed?
-      @viewport.dispose
+    begin
+      if @viewport && @viewport.respond_to?(:disposed?) && !@viewport.disposed?
+        @viewport.dispose
+      end
+    rescue => e
+      mp_log_exception("CHAT: viewport dispose", e) if defined?(mp_log_exception)
     end
     @chat_sprite = nil
     @chat_bitmap = nil
     @viewport    = nil
   end
 
-  # ── Update (called every frame from Scene_Map#update) ───────────────────────
-
   def update
     return unless @initialized
-    check_chat_input
-    update_message_alpha
-    render_chat
+    begin
+      check_chat_input
+      update_message_alpha
+      render_chat
+    rescue => e
+      mp_log_exception("CHAT: update", e) if defined?(mp_log_exception)
+    end
   end
-
-  # ── Public message API ───────────────────────────────────────────────────────
 
   def add_message(text, type = :normal)
     @messages << {
-      text:      text.to_s[0, 100],   # hard cap per-message display length
+      text:      text.to_s[0, 100],
       type:      type,
       timestamp: Time.now.to_f * 1000,
       alpha:     255
     }
     @messages.shift if @messages.length > MAX_MESSAGES * 2
     mp_log("CHAT: #{text}") if defined?(mp_log)
+  rescue => e
+    mp_log_exception("CHAT: add_message", e) if defined?(mp_log_exception)
   end
 
   def send_chat_message(text)
@@ -109,8 +106,8 @@ module MP_ChatOverlay
       parts = text.split(" ", 3)
       if parts.length >= 3
         MP_NetworkManager.send_packet(MP_PacketType::CHAT_WHISPER, {
-          "target"  => parts[1],
-          "message" => parts[2]
+          "target"  => parts[1].to_s,
+          "message" => parts[2].to_s
         })
         add_message("-> #{parts[1]}: #{parts[2]}", :whisper)
       else
@@ -118,58 +115,57 @@ module MP_ChatOverlay
       end
     else
       MP_NetworkManager.send_packet(MP_PacketType::CHAT_MESSAGE, { "message" => text })
-      # Server echoes back the message so we don't add it locally here
     end
+  rescue => e
+    mp_log_exception("CHAT: send_chat_message", e) if defined?(mp_log_exception)
   end
-
-  # ── Packet handler registration ─────────────────────────────────────────────
 
   def register_packet_handlers
     MP_NetworkManager.on_packet(MP_PacketType::CHAT_MESSAGE) do |p|
-      add_message("#{p['sender']}: #{p['message']}", :normal)
+      begin
+        add_message("#{p['sender']}: #{p['message']}", :normal)
+      rescue => e
+        mp_log_exception("CHAT: CHAT_MESSAGE handler", e) if defined?(mp_log_exception)
+      end
     end
 
     MP_NetworkManager.on_packet(MP_PacketType::CHAT_WHISPER) do |p|
-      if p["echo"]
-        add_message("-> #{p['to'] || '?'}: #{p['message']}", :whisper)
-      else
-        add_message("[PM] #{p['sender']}: #{p['message']}", :whisper)
+      begin
+        if p["echo"]
+          add_message("-> #{p['to'] || '?'}: #{p['message']}", :whisper)
+        else
+          add_message("[PM] #{p['sender']}: #{p['message']}", :whisper)
+        end
+      rescue => e
+        mp_log_exception("CHAT: CHAT_WHISPER handler", e) if defined?(mp_log_exception)
       end
     end
 
     MP_NetworkManager.on_packet(MP_PacketType::CHAT_SYSTEM) do |p|
-      add_message("[*] #{p['message']}", :system)
+      begin
+        add_message("[*] #{p['message']}", :system)
+      rescue => e
+        mp_log_exception("CHAT: CHAT_SYSTEM handler", e) if defined?(mp_log_exception)
+      end
     end
   end
 
   private
 
-  # ── Chat input ─────────────────────────────────────────────────────────────
-
-  # FIX: Use pbMessageFreeText (MKXP-Z / PE built-in text input) rather than
-  # trying to intercept arrow keys. This shows a proper keyboard/on-screen input.
-  # Trigger: press F5 (a key not used by PE movement/menu).
-  # If pbMessageFreeText is not available, falls back to a stub.
   def check_chat_input
-    return if $game_temp.in_menu || $game_temp.in_battle
-    # Input::F5 = key code 116 in MKXP-Z (function key, unused by PE by default)
+    return if $game_temp && ($game_temp.in_menu || $game_temp.in_battle) rescue false
     return unless Input.trigger?(Input::F5) rescue false
 
     begin
+      text = nil
       if defined?(pbMessageFreeText)
         text = pbMessageFreeText(_INTL("Chat:"), "", false, 200, Graphics.width)
-      else
-        # Minimal fallback: show a regular message prompt
-        text = pbMessage(_INTL("Chat:"), [], -1).to_s
-        text = ""  # can't easily get text from pbMessage; degrade gracefully
       end
       send_chat_message(text) unless text.nil? || text.strip.empty?
     rescue => e
       mp_log("CHAT: input error #{e.class}: #{e.message}") if defined?(mp_log)
     end
   end
-
-  # ── Message fading ─────────────────────────────────────────────────────────
 
   def update_message_alpha
     now = Time.now.to_f * 1000
@@ -184,15 +180,15 @@ module MP_ChatOverlay
     end
     @messages.reject! { |m| m[:alpha] <= 0 }
     @messages = @messages.last(MAX_MESSAGES * 2) if @messages.length > MAX_MESSAGES * 2
+  rescue
+    nil
   end
-
-  # ── Rendering ──────────────────────────────────────────────────────────────
 
   def ensure_sprites
     return if @chat_sprite && !@chat_sprite.disposed?
     dispose_sprites
     begin
-      screen_h  = Graphics.height
+      screen_h  = Graphics.height rescue 384
       @viewport = Viewport.new(CHAT_X, screen_h - CHAT_HEIGHT - CHAT_Y_OFFSET,
                                CHAT_WIDTH, CHAT_HEIGHT)
       @viewport.z   = 9999
@@ -203,37 +199,42 @@ module MP_ChatOverlay
       mp_log("CHAT: sprite creation error #{e.class}: #{e.message}") if defined?(mp_log)
       @chat_sprite = nil
       @chat_bitmap = nil
+      @viewport    = nil
     end
   end
 
   def render_chat
     recent = @messages.last(MAX_MESSAGES)
-    return if recent.empty?   # don't render empty overlay
+    return if recent.empty?
 
     ensure_sprites
     return unless @chat_sprite && !@chat_sprite.disposed?
+    return unless @chat_bitmap && !@chat_bitmap.disposed?
 
-    @chat_bitmap.clear
+    begin
+      @chat_bitmap.clear
 
-    # Semi-transparent background only as tall as needed
-    used_h = recent.length * LINE_HEIGHT
-    @chat_bitmap.fill_rect(0, CHAT_HEIGHT - used_h, CHAT_WIDTH, used_h,
-                           Color.new(0, 0, 0, 100))
+      used_h = recent.length * LINE_HEIGHT
+      @chat_bitmap.fill_rect(0, CHAT_HEIGHT - used_h, CHAT_WIDTH, used_h,
+                             Color.new(0, 0, 0, 100))
 
-    y = CHAT_HEIGHT - used_h
-    recent.each do |msg|
-      color = case msg[:type]
-              when :system  then Color.new(255, 200,  80, msg[:alpha])
-              when :whisper then Color.new(150, 255, 150, msg[:alpha])
-              else               Color.new(255, 255, 255, msg[:alpha])
-              end
-      @chat_bitmap.font.size  = 14
-      @chat_bitmap.font.color = color
-      @chat_bitmap.draw_text(4, y, CHAT_WIDTH - 8, LINE_HEIGHT, msg[:text])
-      y += LINE_HEIGHT
+      y = CHAT_HEIGHT - used_h
+      recent.each do |msg|
+        color = case msg[:type]
+                when :system  then Color.new(255, 200,  80, msg[:alpha])
+                when :whisper then Color.new(150, 255, 150, msg[:alpha])
+                else               Color.new(255, 255, 255, msg[:alpha])
+                end
+        @chat_bitmap.font.size  = 14
+        @chat_bitmap.font.color = color
+        @chat_bitmap.draw_text(4, y, CHAT_WIDTH - 8, LINE_HEIGHT, msg[:text].to_s)
+        y += LINE_HEIGHT
+      end
+
+      @chat_sprite.visible = true
+    rescue => e
+      mp_log_exception("CHAT: render", e) if defined?(mp_log_exception)
     end
-
-    @chat_sprite.bitmap = @chat_bitmap
-    @chat_sprite.visible = true
   end
 end
+

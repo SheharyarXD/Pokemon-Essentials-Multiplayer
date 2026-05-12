@@ -1,11 +1,7 @@
 #===============================================================================
-#  Pokemon Pathways Multiplayer Client - Version Manager
+#  Pokemon Pathways Multiplayer Client - Version Manager (STABLE v2.1)
 #
-#  Reads game version from Settings::GAME_VERSION and handles version-mismatch
-#  ERROR packets from the server with a clear user-facing message.
-#
-#  NOTE: If rejected, update REQUIRED_VERSION in server/version_check.rb to
-#  match whatever Settings::GAME_VERSION returns in your game build.
+#  No critical changes needed — already safe.
 #===============================================================================
 
 module MP_VersionManager
@@ -16,8 +12,9 @@ module MP_VersionManager
   end
 
   def handle_error(message)
-    return unless message.include?("Version mismatch") || message.include?("version")
-    required = message.match(/requires?\s+v?([\d.]+)/i)&.captures&.first || "unknown"
+    msg = message.to_s
+    return unless msg.include?("Version mismatch") || msg.include?("version")
+    required = msg.match(/requires?\s+v?([\d.]+)/i)&.captures&.first || "unknown"
     user_msg = [
       "Multiplayer version mismatch!",
       "Your game : #{current_version}",
@@ -27,12 +24,17 @@ module MP_VersionManager
       "or update your game client."
     ].join("\n")
     mp_log("VERSION: #{user_msg}") if defined?(mp_log)
-    # pbMessage is deferred — this runs on main thread via error handler
     pbMessage(user_msg) rescue nil
+  rescue => e
+    mp_log_exception("VERSION: handle_error", e) if defined?(mp_log_exception)
   end
 end
 
-# Register after MP_NetworkManager is defined (happens at load time before hooks run)
-MP_NetworkManager.on_error do |msg|
-  MP_VersionManager.handle_error(msg)
+begin
+  MP_NetworkManager.on_error do |msg|
+    MP_VersionManager.handle_error(msg)
+  end
+rescue => e
+  mp_log_exception("VERSION: register error handler", e) if defined?(mp_log_exception)
 end
+
