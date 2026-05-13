@@ -1,25 +1,108 @@
-=== MP Debug Log 2026-05-11 20:13:43 +0500 ===
-[20:13:43] DIAG: Multiplayer plugin loaded
-[20:13:43] DIAG: Ruby version = 3.0.0
-[20:13:43] DIAG: TCPSocket defined? NO
-[20:13:43] DIAG: MP_ClientConfig defined? NO
-[20:13:43] DIAG: MP_NetworkManager defined? NO
-[20:13:43] DIAG: Scene_Map diagnostic hook installed
-[20:14:05] HOOK: Scene_Map#main start hook fired
-[20:14:05] NET: start called
-[20:14:05] DIAG: Scene_Map#main entered
-[20:14:05] DIAG: $Trainer = aaaaaaaaaa
-[20:14:05] NET: TCP connected to 127.0.0.1:9000
-[20:14:05] DIAG: $game_map = 2
-[20:14:05] NET: sending handshake for aaaaaaaaaa v7.4.2
-[20:14:05] DIAG: $game_player = SET
-[20:14:05] DIAG: $mp_network_started = true
-[20:14:07] HOOK: Scene_Map#main start hook fired
-[20:14:07] NET: start called
-[20:14:07] DIAG: Scene_Map#main entered
-[20:14:07] DIAG: $Trainer = XD
-[20:14:07] NET: TCP connected to 127.0.0.1:9000
-[20:14:07] DIAG: $game_map = 2
-[20:14:07] NET: sending handshake for XD v7.4.2
-[20:14:07] DIAG: $game_player = SET
-[20:14:07] DIAG: $mp_network_started = true
+=== MP Debug Log 2026-05-13 21:30:25 +0500 ===
+[21:30:25.616] DIAG: Multiplayer plugin loaded
+[21:30:25.616] DIAG: Ruby version      = 3.0.0
+[21:30:25.616] DIAG: TCPSocket defined = NO
+[21:30:25.617] DIAG: Scene_Map diagnostic hook installed
+[21:30:25.640] HOOKS: installed
+[21:31:38.001] HOOK: Scene_Map#main → starting MP
+[21:31:38.001] NET: start
+[21:31:38.002] OW: initialized
+[21:31:38.003] CHAT: initialized
+[21:31:38.003] NET: connecting (attempt 1)
+[21:31:38.003] BATTLE: initialized
+[21:31:38.006] TRADE: initialized
+[21:31:38.007] DIAG: Scene_Map#main entered
+[21:31:38.007] DIAG: $Trainer   = XD
+[21:31:38.007] DIAG: $game_map  = 32
+[21:31:38.007] DIAG: $game_player = SET
+[21:31:38.276] NET: HANDSHAKE_ACK, client_id=6S1I2G98OR6A
+[21:31:38.644] OW: cleared all remote players
+[21:31:39.349] OW: cleared all remote players
+[21:31:39.350] OW: map player list received (0 players)
+[21:31:39.640] HOOK: Scene_Map#main → starting MP
+[21:31:39.640] NET: start
+[21:31:39.640] OW: initialized
+[21:31:39.641] NET: connecting (attempt 1)
+[21:31:39.642] CHAT: initialized
+[21:31:39.644] BATTLE: initialized
+[21:31:39.645] TRADE: initialized
+[21:31:39.645] DIAG: Scene_Map#main entered
+[21:31:39.645] DIAG: $Trainer   = aaaaaaaaaa
+[21:31:39.646] DIAG: $game_map  = 2
+[21:31:39.646] DIAG: $game_player = SET
+[21:31:40.504] NET: HANDSHAKE_ACK, client_id=DN7U4I9197C2
+[21:31:40.731] OW: cleared all remote players
+[21:31:41.148] OW: cleared all remote players
+[21:31:41.148] OW: map player list received (0 players)
+[21:31:45.171] OW: cleared all remote players
+[21:31:45.239] OW: cleared all remote players
+[21:31:45.240] SPRITE: set character graphic to 'trainer_POKEMONTRAINER_Red'
+[21:31:45.240] OW: create_sprite_for aaaaaaaaaa - no viewport, deferring (is Scene_Map spriteset ready?)
+[21:31:45.240] OW: aaaaaaaaaa joined at map 2 (17,15) sprite='1'
+[21:31:45.240] OW: map player list received (1 players)
+[21:31:45.511] SPRITE: set character graphic to 'trainer_POKEMONTRAINER_Red'
+[21:31:45.512] OW: create_sprite_for XD - no viewport, deferring (is Scene_Map spriteset ready?)
+[21:31:45.512] OW: XD joined at map 2 (18,13) sprite='1'
+[21:31:50.334] OW: create_sprite_for aaaaaaaaaa - no viewport, deferring (is Scene_Map spriteset ready?)
+[21:31:50.557] OW: create_sprite_for XD - no viewport, deferring (is Scene_Map spriteset ready?)
+[21:31:53.592] OW: XD left
+[21:31:53.625] OW: cleared all remote players
+[21:31:53.599] NET: disconnected (Connection lost)
+[21:31:53.663] HOOK: disconnected (Connection lost)
+[21:31:53.663] NET: connecting (attempt 1)
+[21:31:53.663] OW: cleared all remote players
+[21:31:53.664] OW: cleared remote players on disconnect
+[21:31:53.664] OW: cleared all remote players
+[21:31:53.664] OW: cleared remote players on disconnect
+[21:31:53.678] NET: HANDSHAKE_ACK, client_id=EA1H7M57EQGS
+[21:31:53.681] OW: cleared all remote players
+[21:31:53.847] OW: cleared all remote players
+[21:31:53.848] OW: map player list received (0 players)
+[21:31:55.025] NET: disconnected (Receive error: Errno::ECONNABORTED: An established connection was aborted by the software in your host machine.)
+[21:31:55.950] HOOK: disconnected (Receive error: Errno::ECONNABORTED: An established connection was aborted by the software in your host machine.)
+[21:31:55.950] OW: cleared all remote players
+[21:31:55.951] OW: cleared remote players on disconnect
+[21:31:55.951] OW: cleared all remote players
+[21:31:55.951] OW: cleared remote players on disconnect
+[21:31:55.960] NET: connecting (attempt 1)
+[21:31:58.279] NET: HANDSHAKE_ACK, client_id=ZX0CVNT8Y3SD
+[21:31:58.442] OW: cleared all remote players
+[21:31:58.900] OW: cleared all remote players
+[21:31:58.900] OW: map player list received (0 players)
+[21:32:00.403] OW: cleared all remote players
+[21:32:00.550] SPRITE: set character graphic to 'trainer_POKEMONTRAINER_Red'
+[21:32:00.550] OW: create_sprite_for aaaaaaaaaa - no viewport, deferring (is Scene_Map spriteset ready?)
+[21:32:00.550] OW: aaaaaaaaaa joined at map 32 (6,10) sprite='1'
+[21:32:00.893] OW: cleared all remote players
+[21:32:00.894] SPRITE: set character graphic to 'trainer_POKEMONTRAINER_Red'
+[21:32:00.894] OW: create_sprite_for XD - no viewport, deferring (is Scene_Map spriteset ready?)
+[21:32:00.894] OW: XD joined at map 32 (8,8) sprite='1'
+[21:32:00.895] OW: map player list received (1 players)
+[21:32:05.901] OW: create_sprite_for XD - no viewport, deferring (is Scene_Map spriteset ready?)
+[21:32:06.046] OW: create_sprite_for aaaaaaaaaa - no viewport, deferring (is Scene_Map spriteset ready?)
+[21:32:06.047] NET: disconnected (Connection lost)
+[21:32:06.480] HOOK: disconnected (Connection lost)
+[21:32:06.480] OW: cleared all remote players
+[21:32:06.481] OW: cleared remote players on disconnect
+[21:32:06.481] OW: cleared all remote players
+[21:32:06.481] OW: cleared remote players on disconnect
+[21:32:06.495] NET: connecting (attempt 1)
+[21:32:07.078] DIAG: Scene_Map#main exited
+[21:32:07.079] NET: stopped
+[21:32:07.079] OW: cleared all remote players
+[21:32:07.080] OW: disposed
+[21:32:07.080] CHAT: disposed
+[21:32:07.080] HOOK: Scene_Map#main exiting
+[21:32:06.150] NET: disconnected (Connection lost)
+[21:32:08.351] HOOK: disconnected (Connection lost)
+[21:32:08.351] OW: cleared all remote players
+[21:32:08.352] OW: cleared remote players on disconnect
+[21:32:08.352] OW: cleared all remote players
+[21:32:08.352] OW: cleared remote players on disconnect
+[21:32:08.366] NET: connecting (attempt 1)
+[21:32:08.547] DIAG: Scene_Map#main exited
+[21:32:08.548] NET: stopped
+[21:32:08.548] OW: cleared all remote players
+[21:32:08.548] OW: disposed
+[21:32:08.549] CHAT: disposed
+[21:32:08.549] HOOK: Scene_Map#main exiting

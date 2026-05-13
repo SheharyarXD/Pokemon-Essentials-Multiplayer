@@ -1,32 +1,43 @@
 #===============================================================================
-#  Pokemon Pathways Multiplayer Client - Overworld Sync Manager (STABLE v2.1)
+#  Pokemon Pathways Multiplayer Client - Overworld Sync Manager
 #
-#  CRITICAL FIXES for Root Causes #2 and #3:
+#  Responsibilities:
+#    * Track remote players: data (RemotePlayerData) + character (MP_Game_RemotePlayer)
+#      + sprite (Sprite_MP_RemotePlayer).
+#    * Update local position and send movement packets.
+#    * Apply incoming server packets to remote player state.
+#    * Cull players outside the visible radius.
 #
-#  Root Cause 2 — Remote sprites never updated:
-#    Added update_remote_sprites() that calls update_safe on every sprite.
-#    This replaces the missing Spriteset_Map integration.
+#  ARCHITECTURE (thread safety):
+#    All methods here run on the MAIN (game loop) thread, called from
+#    Scene_Map#update. Remote player data is only mutated here.
+#    MP_NetworkManager.tick dispatches incoming events before this runs,
+#    so by the time update() is called, all queued packets have been
+#    processed synchronously on the main thread. No mutex needed here.
 #
-#  Root Cause 3 — Viewport invalidation race:
-#    Added @map_changing flag set during transfer. Blocks sprite creation
-#    while a transition is in progress. Added viewport revalidation before
-#    every use.
-#
-#  ADDITIONAL FIXES:
-#    * create_sprite_for checks SAFE_MODE and REMOTE_RENDERING_ENABLED
-#    * handle_player_join defers sprite creation by 1 frame if viewport unstable
-#    * remove_remote_player_safe catches ALL exceptions
-#    * update_remote_players removes crashed players automatically
-#    * map_viewport aggressively refetches from current spriteset
+#  FIXES vs original:
+#   * RACE: @remote_players was mutated from receive_thread + iterated on main
+#     thread. Fixed by the event-queue architecture in MP_NetworkManager.
+#   * SPRITE CREATION ON WRONG THREAD: create_remote_player now runs on the
+#     main thread (deferred via event queue).
+#   * VIEWPORT: stored from Spriteset_Map instance, not called as class method.
+#   * DOUBLE MAP_CHANGE: update_local_position no longer sends MAP_CHANGE (that
+#     is the transfer_player hook's job). It only sends PLAYER_MOVE.
+#   * DOUBLE POSITION SEND: removed redundant unconditional resend every 3 frames.
+#     Resend only happens every POSITION_RESEND_INTERVAL frames (2 sec default).
+#   * GHOST PLAYERS: clear_remote_players called on disconnect and map change.
+#   * SPRITESET ACCESS: use instance_variable_get(:@spriteset) because
+#     Scene_Map has no `spriteset` reader method in PE v19.1.
+#   * LOG SPAM: "no viewport" message is now rate-limited (once per 5 sec).
+#   * SPRITE CREATION BACKOFF: failed sprite creation is retried with a
+#     30-frame cooldown per player to prevent flooding the log every frame.
 #===============================================================================
 
 module MP_OverworldManager
-  module_function
 
   @remote_players  = {}   # mp_id => MP_Game_RemotePlayer
   @remote_sprites  = {}   # mp_id => Sprite_MP_RemotePlayer
-  @map_viewport    = nil  # Viewport from Spriteset_Map
-  @viewport_valid  = false # whether @map_viewport has been validated this frame
+  @map_viewport    = nil  # Viewport from Spriteset_Map; set by hook
 
   @last_x          = nil
   @last_y          = nil
@@ -34,132 +45,65 @@ module MP_OverworldManager
   @last_map        = nil
   @frame_count     = 0
   @initialized     = false
-  @map_changing    = false  # TRUE during map transfer transition
 
-  # Players who joined while viewport was unavailable — retry next frame
-  @pending_sprite_creations = []
+  # Rate-limiting for "no viewport" log to prevent log-spam
+  @last_no_vp_log  = 0
+
+  # Per-player retry cooldown: mp_id => next_allowed_frame
+  # When sprite creation fails (no viewport) we wait 30 frames before retry.
+  @sprite_retry_at = {}
 
   # ── Lifecycle ───────────────────────────────────────────────────────────────
 
   def init
     return if @initialized
-    @initialized = true
-    @remote_players  = {}
-    @remote_sprites  = {}
-    @pending_sprite_creations = []
-    @map_changing = false
-    @map_viewport = nil
-    @viewport_valid = false
+    @initialized     = true
+    @sprite_retry_at = {}
     register_packet_handlers
-    mp_log("OW: initialized v2.1") if defined?(mp_log)
-  end
-
-  def leave_scene_map
-    clear_remote_players
-    @map_viewport = nil
-    @viewport_valid = false
-    @map_changing = false
-    @pending_sprite_creations.clear
-    @last_x = @last_y = @last_dir = @last_map = nil
-    @frame_count = 0
-    mp_log("OW: leave_scene_map") if defined?(mp_log)
+    mp_log("OW: initialized") if defined?(mp_log)
   end
 
   def dispose
-    leave_scene_map
-    @initialized = false
+    clear_remote_players
+    @map_viewport   = nil
+    @initialized    = false
+    @last_x = @last_y = @last_dir = @last_map = nil
+    @last_no_vp_log = 0
+    @sprite_retry_at = {}
     mp_log("OW: disposed") if defined?(mp_log)
   end
 
-  def mp_ow_diag?
-    MP_ClientConfig::NETWORK_DIAGNOSTICS
-  rescue NameError
-    false
-  end
-
-  def in_safe_mode?
-    MP_ClientConfig::SAFE_MODE rescue false
-  end
-
-  def rendering_enabled?
-    MP_ClientConfig::REMOTE_RENDERING_ENABLED rescue true
-  end
-
-  # ── Per-frame update (called from Scene_Map#update) ─────────────────────────
-
+  # Called by Scene_Map#update every frame.
   def update
     return unless MP_NetworkManager.connected?
     @frame_count += 1
-    @viewport_valid = false  # Revalidate each frame
-
-    # Process any deferred sprite creations first
-    process_pending_sprite_creations
-
-    begin
-      update_local_position
-    rescue => e
-      mp_log_exception("OW: update_local_position", e) if defined?(mp_log_exception)
-    end
-
-    begin
-      update_remote_players
-    rescue => e
-      mp_log_exception("OW: update_remote_players", e) if defined?(mp_log_exception)
-    end
-
-    begin
-      update_remote_sprites  # CRITICAL FIX: manually update sprites
-    rescue => e
-      mp_log_exception("OW: update_remote_sprites", e) if defined?(mp_log_exception)
-    end
-
-    begin
-      update_culling
-    rescue => e
-      mp_log_exception("OW: update_culling", e) if defined?(mp_log_exception)
-    end
+    update_local_position
+    update_remote_players
+    update_culling
   end
 
-  # ── Viewport management ─────────────────────────────────────────────────────
-
+  # Store the map viewport so we can pass it to sprites and name labels.
+  # Called from Scene_Map#main after spriteset is created.
   def set_viewport(vp)
-    old_vp = @map_viewport
-    if vp && !vp.disposed?
-      @map_viewport = vp
-      @viewport_valid = true
-      mp_log("OW: set_viewport map=#{$game_map&.map_id} vp=#{vp.object_id}") if defined?(mp_log) && mp_ow_diag?
-    else
-      @map_viewport = nil
-      @viewport_valid = false
-      mp_log("OW: set_viewport REJECTED (disposed/nil)") if defined?(mp_log) && mp_ow_diag?
-    end
+    @map_viewport = vp
+    @last_no_vp_log = 0   # reset log timer so next failure is reported
   end
 
+  # Called on map transfer (from Scene_Map#transfer_player hook).
   def on_map_changed
-    mp_log("OW: on_map_changed map=#{$game_map&.map_id}") if defined?(mp_log) && mp_ow_diag?
-    @map_changing = true
     clear_remote_players
-    @pending_sprite_creations.clear
-    @map_viewport = nil
-    @viewport_valid = false
     @last_x = @last_y = @last_dir = @last_map = nil
-    # Release transition lock after a short delay (map needs time to load)
-    @map_change_frame = @frame_count
+    @map_viewport = nil   # viewport will be re-acquired on new map
+    @sprite_retry_at.clear
   end
 
-  def on_map_change_complete
-    # Called from Scene_Map hook after transfer_player finishes
-    @map_changing = false
-    @map_change_frame = nil
-    mp_log("OW: map_change_complete") if defined?(mp_log) && mp_ow_diag?
-  end
-
+  # Called on server disconnect.
   def on_disconnect
     clear_remote_players
-    @pending_sprite_creations.clear
-    @map_changing = false
     @last_x = @last_y = @last_dir = @last_map = nil
-    mp_log("OW: cleared on disconnect") if defined?(mp_log)
+    @map_viewport = nil
+    @sprite_retry_at.clear
+    mp_log("OW: cleared remote players on disconnect") if defined?(mp_log)
   end
 
   # ── Packet handler registration ─────────────────────────────────────────────
@@ -173,10 +117,16 @@ module MP_OverworldManager
     MP_NetworkManager.on_packet(MP_PacketType::PLAYER_SPRITE)   { |p| handle_player_sprite(p)   }
     MP_NetworkManager.on_packet(MP_PacketType::PLAYER_DATA)     { |p| handle_player_data(p)     }
     MP_NetworkManager.on_packet(MP_PacketType::PLAYER_ACTION)   { |p| handle_player_action(p)   }
+
     MP_NetworkManager.on_disconnect { on_disconnect }
+
+    MP_NetworkManager.on_connect do
+      # On (re)connect, initial MAP_CHANGE is sent by MP_NetworkManager#initial_player_data
+      on_map_changed
+    end
   end
 
-  # ── Local player movement ───────────────────────────────────────────────────
+  # ── Local player movement ────────────────────────────────────────────────────
 
   def update_local_position
     return unless $game_player && $game_map
@@ -199,6 +149,7 @@ module MP_OverworldManager
       @last_dir = dir
     end
 
+    # Periodic resend only - NOT every 3 frames (was causing 20 packets/sec).
     if @frame_count % MP_ClientConfig::POSITION_RESEND_INTERVAL == 0
       MP_NetworkManager.send_packet(MP_PacketType::PLAYER_MOVE, {
         "x"         => x,
@@ -207,66 +158,49 @@ module MP_OverworldManager
       })
     end
 
+    # Party data every ~5 seconds
     if @frame_count % 300 == 0
       MP_NetworkManager.send_party_data
     end
   end
 
-  # ── Remote player update loop ───────────────────────────────────────────────
+  # ── Remote player update loop ────────────────────────────────────────────────
 
   def update_remote_players
-    to_remove = []
     @remote_players.each do |mp_id, rp|
-      begin
-        rp.update
-      rescue => e
-        mp_log_exception("OW: update_remote_players id=#{mp_id}", e) if defined?(mp_log_exception)
-        to_remove << mp_id
-      end
-    end
-    to_remove.each { |mp_id| remove_remote_player_safe(mp_id) }
-  end
-
-  # CRITICAL FIX (Root Cause #2): Manually update all remote sprites.
-  # Spriteset_Map doesn't know about our sprites, so we must call update_safe.
-  def update_remote_sprites
-    return unless rendering_enabled?
-    return if in_safe_mode?
-
-    to_remove = []
-    @remote_sprites.each do |mp_id, sprite|
-      begin
-        if sprite.nil? || sprite.disposed?
-          to_remove << mp_id
+      sprite = @remote_sprites[mp_id]
+      need_create = sprite.nil? || sprite.disposed? ||
+                    (sprite.viewport && sprite.viewport.disposed? rescue false)
+      if need_create
+        # BACKOFF: don't retry every single frame if viewport isn't ready yet.
+        # This prevents flooding the debug log with "no viewport, deferring".
+        next_retry = @sprite_retry_at[mp_id] || 0
+        if @frame_count < next_retry
+          rp.update
           next
         end
-        # Validate the sprite's viewport hasn't been disposed
-        vp = sprite.viewport rescue nil
-        if vp && vp.respond_to?(:disposed?) && vp.disposed?
-          to_remove << mp_id
-          next
-        end
-        sprite.update_safe
-      rescue => e
-        mp_log_exception("OW: update_remote_sprites id=#{mp_id}", e) if defined?(mp_log_exception)
-        to_remove << mp_id
+        @sprite_retry_at[mp_id] = @frame_count + 30   # retry in ~0.5 sec at 60fps
+        create_sprite_for(rp)
       end
+      rp.update
     end
-    to_remove.each { |mp_id| remove_remote_player_safe(mp_id) }
   end
 
   def update_culling
     return unless $game_player && $game_map
     @remote_players.each do |mp_id, rp|
-      begin
-        cull = rp.data.should_cull?
-        sprite = @remote_sprites[mp_id]
-        next if sprite.nil? || sprite.disposed?
-        sprite.visible = !cull if sprite.respond_to?(:visible=)
-        rp.data.visible = !cull
-        rp.instance_variable_set(:@transparent, cull)
-      rescue => e
-        mp_log_exception("OW: update_culling id=#{mp_id}", e) if defined?(mp_log_exception)
+      # Always cull players on a different map; only check distance on same map
+      same_map = rp.data.map_id == $game_map.map_id
+      cull = !same_map || rp.data.should_cull?
+      sprite = @remote_sprites[mp_id]
+      if cull
+        rp.data.visible      = false
+        sprite.visible       = false if sprite && !sprite.disposed?
+        rp.instance_variable_set(:@transparent, true)
+      else
+        rp.data.visible      = true
+        sprite.visible       = true if sprite && !sprite.disposed?
+        rp.instance_variable_set(:@transparent, false)
       end
     end
   end
@@ -274,19 +208,19 @@ module MP_OverworldManager
   # ── Incoming packet handlers (all run on main thread via event queue) ────────
 
   def handle_player_join(payload)
-    payload = {} if payload.nil?
     mp_id = payload["client_id"]
     return unless mp_id
     return if mp_id == MP_NetworkManager.client_id
 
-    mp_log("OW: PLAYER_JOIN id=#{mp_id} name=#{payload['name']} x=#{payload['x']} y=#{payload['y']}") if defined?(mp_log)
+    remove_remote_player(mp_id)  # clean up stale entry if any
 
-    remove_remote_player_safe(mp_id)
+    # Use the map_id from payload if available, otherwise current map
+    map_id = payload["map_id"] || $game_map&.map_id || 0
 
     data = RemotePlayerData.new(
       mp_id,
       payload["name"] || "???",
-      $game_map&.map_id,
+      map_id,
       payload["x"] || 0,
       payload["y"] || 0,
       payload["direction"] || 2,
@@ -298,87 +232,54 @@ module MP_OverworldManager
     rp = MP_Game_RemotePlayer.new(data)
     @remote_players[mp_id] = rp
 
-    # SAFE MODE: do not create any sprites
-    if in_safe_mode?
-      mp_log("OW: SAFE MODE — sprite creation skipped id=#{mp_id}") if defined?(mp_log)
-      return
-    end
+    # Reset retry cooldown so first attempt happens immediately
+    @sprite_retry_at[mp_id] = 0
+    create_sprite_for(rp)
 
-    if rendering_enabled?
-      create_sprite_for(rp)
-    end
-
-    mp_log("OW: PLAYER_JOIN done id=#{mp_id}") if defined?(mp_log)
-  rescue => e
-    mp_log_exception("OW: handle_player_join FAILED id=#{mp_id}", e) if defined?(mp_log_exception)
-    remove_remote_player_safe(mp_id)
+    mp_log("OW: #{data.name} joined at map #{map_id} (#{data.x},#{data.y}) sprite='#{data.sprite_name}'") if defined?(mp_log)
   end
 
   def handle_player_leave(payload)
     mp_id = payload["client_id"]
     return unless mp_id
     name = @remote_players[mp_id]&.mp_name
-    mp_log("OW: PLAYER_LEAVE id=#{mp_id} name=#{name}") if defined?(mp_log)
-    remove_remote_player_safe(mp_id)
+    remove_remote_player(mp_id)
+    mp_log("OW: #{name} left") if defined?(mp_log)
   end
 
   def handle_pos_sync(payload)
     (payload["players"] || []).each do |p|
-      begin
-        mp_id = p["client_id"]
-        next unless mp_id && mp_id != MP_NetworkManager.client_id
-        rp = @remote_players[mp_id]
-        next unless rp
-        rp.data.set_target(p["x"], p["y"]) if p["x"] && p["y"]
-        rp.set_direction(p["direction"])   if p["direction"]
-      rescue => e
-        mp_log_exception("OW: handle_pos_sync client=#{p['client_id']}", e) if defined?(mp_log_exception)
-      end
+      mp_id = p["client_id"]
+      next unless mp_id && mp_id != MP_NetworkManager.client_id
+      rp = @remote_players[mp_id]
+      next unless rp
+      # Update map_id so culling works correctly
+      rp.data.map_id = p["map_id"] if p["map_id"]
+      rp.data.set_target(p["x"], p["y"]) if p["x"] && p["y"]
+      rp.set_direction(p["direction"])   if p["direction"]
     end
   end
 
   def handle_map_player_list(payload)
-    n = payload["players"]&.length || 0
-    mp_log("OW: MAP_PLAYER_LIST n=#{n}") if defined?(mp_log)
     clear_remote_players
-    (payload["players"] || []).each do |p|
-      begin
-        handle_player_join(p)
-      rescue => e
-        mp_log_exception("OW: MAP_PLAYER_LIST entry", e) if defined?(mp_log_exception)
-      end
-    end
-    mp_log("OW: MAP_PLAYER_LIST applied n=#{n}") if defined?(mp_log)
+    (payload["players"] || []).each { |p| handle_player_join(p) }
+    mp_log("OW: map player list received (#{payload['players']&.length || 0} players)") if defined?(mp_log)
   end
 
   def handle_player_dir(payload)
     mp_id = payload["client_id"]
     rp = @remote_players[mp_id]
     rp.set_direction(payload["direction"]) if rp && payload["direction"]
-  rescue => e
-    mp_log_exception("OW: handle_player_dir id=#{mp_id}", e) if defined?(mp_log_exception)
   end
 
   def handle_player_sprite(payload)
     mp_id = payload["client_id"]
     rp = @remote_players[mp_id]
     return unless rp && payload["sprite"]
-    mp_log("OW: PLAYER_SPRITE id=#{mp_id} -> #{payload['sprite']}") if defined?(mp_log) && mp_ow_diag?
     rp.data.sprite_name = payload["sprite"]
     rp.data.outfit      = payload["outfit"].to_i
     rp.set_character_graphic(payload["sprite"])
-    sprite = @remote_sprites[mp_id]
-    if sprite && !sprite.disposed?
-      # Force re-check bitmap on next update_safe
-      begin
-        sprite.instance_variable_set(:@character_name, nil) if sprite.respond_to?(:instance_variable_set)
-      rescue
-        nil
-      end
-    end
     rp.refresh_name_sprite(@map_viewport)
-  rescue => e
-    mp_log_exception("OW: handle_player_sprite id=#{mp_id}", e) if defined?(mp_log_exception)
   end
 
   def handle_player_data(payload)
@@ -387,191 +288,135 @@ module MP_OverworldManager
     return unless rp && payload["party_display"]
     rp.data.party_display = payload["party_display"]
     rp.refresh_name_sprite(@map_viewport)
-  rescue => e
-    mp_log_exception("OW: handle_player_data id=#{mp_id}", e) if defined?(mp_log_exception)
   end
 
   def handle_player_action(payload)
-    # reserved
+    # Extensible for emotes, animations, etc.
   end
 
   # ── Sprite management (main thread only) ────────────────────────────────────
 
   def create_sprite_for(rp)
-    return unless rp
-    return if in_safe_mode?
-    return unless rendering_enabled?
-
-    unless in_scene_map?
-      mp_log("OW: create_sprite_for SKIP (not Scene_Map) id=#{rp.mp_id}") if defined?(mp_log)
-      return
-    end
-
-    # Block creation during map transitions
-    if @map_changing
-      mp_log("OW: create_sprite_for DEFERRED (map changing) id=#{rp.mp_id}") if defined?(mp_log)
-      @pending_sprite_creations << rp.mp_id
-      return
-    end
-
     vp = map_viewport
-    unless viewport_ok?(vp)
-      mp_log("OW: create_sprite_for DEFERRED (no viewport) id=#{rp.mp_id}") if defined?(mp_log)
-      @pending_sprite_creations << rp.mp_id
+    unless vp
+      now = Time.now.to_f
+      if now - @last_no_vp_log > 5.0
+        mp_log("OW: create_sprite_for #{rp.mp_name} - no viewport, deferring (is Scene_Map spriteset ready?)") if defined?(mp_log)
+        @last_no_vp_log = now
+      end
       return
     end
 
-    mp_log("OW: create_sprite_for START id=#{rp.mp_id} charset=#{rp.character_name}") if defined?(mp_log)
+    # Don't create duplicate sprites
+    old = @remote_sprites[rp.mp_id]
+    if old && !old.disposed?
+      mp_log("OW: create_sprite_for #{rp.mp_name} - sprite already exists") if defined?(mp_log)
+      return
+    end
 
     begin
       sprite = Sprite_MP_RemotePlayer.new(vp, rp)
       @remote_sprites[rp.mp_id] = sprite
-      rp.mp_sprite = sprite
-      rp.create_name_sprite(vp)
-      mp_log("OW: REMOTE PLAYER CREATED id=#{rp.mp_id} oid=#{sprite.object_id}") if defined?(mp_log)
-    rescue => e
-      mp_log_exception("OW: create_sprite_for FAILED id=#{rp.mp_id}", e) if defined?(mp_log_exception)
-      # Don't remove the player — they can still be tracked without a sprite
-      # The next MAP_PLAYER_LIST or PLAYER_JOIN will retry
-    end
-  end
 
-  def process_pending_sprite_creations
-    return if @pending_sprite_creations.empty?
-    return if @map_changing
-    return if in_safe_mode?
-    return unless rendering_enabled?
-
-    vp = map_viewport
-    return unless viewport_ok?(vp)
-
-    # Retry pending sprites
-    retry_ids = @pending_sprite_creations.dup
-    @pending_sprite_creations.clear
-
-    retry_ids.each do |mp_id|
-      rp = @remote_players[mp_id]
-      next unless rp
-      next if @remote_sprites[mp_id] && !@remote_sprites[mp_id].disposed?
-      begin
-        create_sprite_for(rp)
-      rescue => e
-        mp_log_exception("OW: pending_sprite retry id=#{mp_id}", e) if defined?(mp_log_exception)
+      # Add to spriteset's character_sprites so it gets updated every frame.
+      # Without this, Sprite_Character never loads its bitmap/animates.
+      # FIX: use instance_variable_get(:@spriteset) because Scene_Map has no
+      #      `spriteset` reader method in Pokemon Essentials v19.1.
+      spriteset = ($scene.instance_variable_get(:@spriteset) rescue nil)
+      if spriteset
+        arr = spriteset.instance_variable_get(:@character_sprites)
+        if arr && !arr.include?(sprite)
+          arr << sprite
+          mp_log("OW: sprite added to spriteset for #{rp.mp_name}") if defined?(mp_log)
+        end
       end
+
+      # Create name label on the same viewport
+      rp.create_name_sprite(vp)
+      mp_log("OW: sprite created for #{rp.mp_name}") if defined?(mp_log)
+
+      # Clear retry cooldown on success
+      @sprite_retry_at.delete(rp.mp_id)
+    rescue => e
+      mp_log("OW: create_sprite_for error #{e.class}: #{e.message}") if defined?(mp_log)
     end
   end
 
-  def remove_remote_player_safe(mp_id)
-    return unless mp_id
-
+  def remove_remote_player(mp_id)
     sprite = @remote_sprites.delete(mp_id)
     if sprite && !sprite.disposed?
-      begin
-        sprite.dispose
-      rescue => e
-        mp_log_exception("OW: remove sprite.dispose id=#{mp_id}", e) if defined?(mp_log_exception)
+      # Remove from spriteset so it doesn't update a disposed sprite
+      # FIX: use instance_variable_get(:@spriteset)
+      spriteset = ($scene.instance_variable_get(:@spriteset) rescue nil)
+      if spriteset
+        arr = spriteset.instance_variable_get(:@character_sprites)
+        arr&.delete(sprite)
       end
+      sprite.dispose   # also disposes rp name sprite via override
     end
-
-    rp = @remote_players.delete(mp_id)
-    if rp && rp.respond_to?(:dispose)
-      begin
-        rp.dispose
-      rescue => e
-        mp_log_exception("OW: remove rp.dispose id=#{mp_id}", e) if defined?(mp_log_exception)
-      end
-    end
-
-    @pending_sprite_creations.delete(mp_id)
-
-    mp_log("OW: removed id=#{mp_id}") if defined?(mp_log) && mp_ow_diag?
+    @remote_players.delete(mp_id)
+    @sprite_retry_at.delete(mp_id)
   end
 
   def clear_remote_players
-    # Dispose sprites first
-    @remote_sprites.each do |mp_id, sprite|
-      next unless sprite
-      begin
-        sprite.dispose unless sprite.disposed?
-      rescue => e
-        mp_log_exception("OW: clear sprite id=#{mp_id}", e) if defined?(mp_log_exception)
+    # Remove from spriteset first to avoid updating disposed sprites
+    # FIX: use instance_variable_get(:@spriteset)
+    spriteset = ($scene.instance_variable_get(:@spriteset) rescue nil)
+    if spriteset
+      arr = spriteset.instance_variable_get(:@character_sprites)
+      if arr
+        @remote_sprites.each_value do |s|
+          arr.delete(s) if !s.disposed?
+        end
       end
+    end
+    @remote_sprites.each_value do |s|
+      s.dispose unless s.disposed?
     end
     @remote_sprites.clear
-
-    # Dispose characters
-    @remote_players.each do |mp_id, rp|
-      begin
-        rp.dispose if rp.respond_to?(:dispose)
-      rescue => e
-        mp_log_exception("OW: clear rp id=#{mp_id}", e) if defined?(mp_log_exception)
-      end
-    end
     @remote_players.clear
-    @pending_sprite_creations.clear
-
-    mp_log("OW: cleared all") if defined?(mp_log)
+    @sprite_retry_at.clear
+    mp_log("OW: cleared all remote players") if defined?(mp_log)
   end
+
+  # ── Helpers ─────────────────────────────────────────────────────────────────
 
   def remote_player_count
     @remote_players.length
   end
 
-  def remote_sprite_count
-    @remote_sprites.count { |_, s| s && !s.disposed? }
-  end
-
-  # ─── Private helpers ────────────────────────────────────────────────────────
-
   private
 
   def in_scene_map?
     $scene.is_a?(Scene_Map)
-  rescue
-    false
   end
 
-  def viewport_ok?(vp)
-    vp && vp.respond_to?(:disposed?) && !vp.disposed?
-  rescue
-    false
-  end
-
-  # Aggressively refetch viewport from current spriteset every time.
-  # This ensures we never use a stale/disposed viewport.
+  # Get the map viewport from the Spriteset_Map instance.
+  # FIX: Scene_Map stores the spriteset as @spriteset (instance variable),
+  #      NOT as a `spriteset` accessor method. Use instance_variable_get.
   def map_viewport
-    # Return cached if still valid
-    if @map_viewport && !@map_viewport.disposed?
-      return @map_viewport
+    # Return cached viewport if still valid
+    if @map_viewport
+      begin
+        return @map_viewport unless @map_viewport.disposed?
+      rescue
+        # viewport object is in a bad state, fall through to re-acquire
+      end
     end
-
-    @map_viewport = nil
     return nil unless in_scene_map?
 
-    begin
-      spriteset = $scene.spriteset
-      return nil unless spriteset
+    # FIX: Scene_Map has no `spriteset` reader - access @spriteset directly
+    scene_map = $scene
+    return nil unless scene_map.is_a?(Scene_Map)
+    spriteset = scene_map.instance_variable_get(:@spriteset)
+    return nil unless spriteset
 
-      vp = nil
-      # Try multiple viewport ivar names (different PE versions)
-      ivar_names = [:@viewport1, :@viewport, :@map_viewport, :@tilemap_viewport]
-      ivar_names.each do |ivar|
-        v = spriteset.instance_variable_get(ivar)
-        if v && v.respond_to?(:disposed?) && !v.disposed?
-          vp = v
-          break
-        end
-      end
-
-      @map_viewport = vp
-      @viewport_valid = true if vp
-
-      mp_log("OW: map_viewport refetched vp=#{vp&.object_id}") if defined?(mp_log) && vp && mp_ow_diag?
-      vp
-    rescue => e
-      mp_log_exception("OW: map_viewport refetch", e) if defined?(mp_log_exception)
-      nil
-    end
+    # Try known viewport attribute names used by different PE versions
+    vp = spriteset.instance_variable_get(:@viewport1) ||
+         spriteset.instance_variable_get(:@viewport)  ||
+         spriteset.instance_variable_get(:@map_viewport)
+    @map_viewport = vp
+    vp
   end
+  extend self
 end
-

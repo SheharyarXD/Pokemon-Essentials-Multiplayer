@@ -1,42 +1,38 @@
 #===============================================================================
-#  Pokemon Pathways Multiplayer Client - Remote Player Character (STABLE v2.1)
+#  Pokemon Pathways Multiplayer Client - Remote Player Character
 #
-#  CRITICAL FIX: Addresses Root Cause #5 (name sprite viewport staleness) and
-#  hardens all rendering-related code paths.
+#  Subclass of Game_Character that the existing Spriteset_Map can render like
+#  any other map character. Reads position from a RemotePlayerData instance
+#  and applies smoothed interpolation each frame.
 #
-#  ARCHITECTURE:
-#    Subclass of Game_Character. PE's Spriteset_Map can render us like any
-#    other character. Position/animation reads from RemotePlayerData.
-#
-#  KEY SAFETY CHANGES:
-#    * update_name_sprite_position: validates sprite AND bitmap AND viewport
-#      on every call. Disposes and nils if any are invalid.
-#    * create_name_sprite: additional validation that viewport isn't disposed.
-#    * No direct bitmap disposal without nil check.
-#    * All update paths wrapped in begin/rescue.
-#    * screen_x/screen_y delegates to data's real_x/real_y (no super call
-#      to Game_Character#update which has side effects).
+#  FIXES vs original:
+#   * CONSTRUCTOR: super() with no arguments. Original called super($game_map)
+#     but Game_Character#initialize in PE v19.1 takes no arguments.
+#   * INTERPOLATION: now delegates to RemotePlayerData#update_interpolation which
+#     snapshots from current real_x/real_y, preventing backwards snapping.
+#   * NAME SPRITE VIEWPORT: creates name sprites on an explicit viewport with
+#     high Z so they appear above tiles but below menus.
+#   * No Sprite/Bitmap creation happens in initialize; create_name_sprite must
+#     be called explicitly from the main thread only.
 #===============================================================================
 
 class MP_Game_RemotePlayer < Game_Character
   attr_reader   :mp_id, :mp_name, :data
-  attr_accessor :mp_sprite
+  attr_accessor :mp_sprite  # back-reference to our Sprite_Character, set by overworld
 
   def initialize(data)
-    super()
-    @data    = data
+    super()   # FIX: no arguments - Game_Character#initialize takes none in PE v19.1
+    @data    = data            # RemotePlayerData instance
     @mp_id   = data.id
     @mp_name = data.name
 
     # Game_Character configuration
-    @through        = true
+    @through        = true    # don't block player movement
     @walk_anime     = true
     @step_anime     = false
     @transparent    = false
     @opacity        = 255
     @move_speed     = 4
-    @pattern        = 0
-    @priority_type  = 1   # 0=below, 1=same, 2=above player
 
     # Sync initial position from data
     @x          = data.x
@@ -48,230 +44,137 @@ class MP_Game_RemotePlayer < Game_Character
 
     set_character_graphic(data.sprite_name)
 
-    # Ensure jump vars exist (some plugins read them)
-    @jump_count         = 0
-    @jump_peak          = 0
-    @jump_distance      = 0
-    @jump_distance_left = 0
+    # Ensure animation state is valid (Game_Character sets these, but guard anyway)
+    @pattern      ||= 0
+    @original_direction ||= @direction
 
     # Name label sprite (nil until create_name_sprite is called)
     @name_sprite    = nil
     @name_viewport  = nil
-    @name_valid     = false  # true when name sprite is confirmed alive
   end
 
-  # Overworld Shadows EX calls event.name — must be a String.
-  def name
-    ""
-  end
-
-  # Safe for plugins that do character_name[/regex/] (nil => crash).
-  def character_name
-    n = @character_name
-    (n.nil? || n.to_s.empty?) ? "" : n.to_s
-  end
-
-  # Override to provide our own pattern for animation
-  def pattern
-    @pattern || 0
-  end
-
-  # ─── Frame update (called by MP_OverworldManager) ──────────────────────────
+  # ─── Frame update ──────────────────────────────────────────────────────────
 
   def update
-    # Interpolate position
-    if MP_ClientConfig::INTERPOLATION_ENABLED
-      begin
-        @data.update_interpolation
-      rescue => e
-        # Interpolation failure is non-fatal
-      end
-    end
+    # Advance interpolation in RemotePlayerData
+    @data.update_interpolation if MP_ClientConfig::INTERPOLATION_ENABLED
 
-    # Sync position from data to Game_Character vars
+    # Mirror real_x/real_y from data to self (Game_Character uses these for rendering)
     @real_x     = @data.real_x.to_i
     @real_y     = @data.real_y.to_i
     @x          = @data.x
     @y          = @data.y
     @direction  = @data.direction
 
-    # Walk animation pattern cycling
-    if @data.interpolating || @data.respond_to?(:moving?) && @data.moving?
-      @pattern = ((@pattern || 0) + 1) % 4 if Graphics.frame_count % 8 == 0
-    else
-      @pattern = 1  # standing frame
+    # Animate walk cycle when interpolating
+    if @data.interpolating
+      @pattern    = (@pattern + 1) % 4 if Graphics.frame_count % 8 == 0
     end
 
-    # Update name label position
     update_name_sprite_position
-
-    # DO NOT call super — Game_Character#update has move route processing,
-    # collision detection, and other side effects we don't want for remote
-    # players. All our state comes from @data.
-  rescue => e
-    mp_log_exception("MP_Game_RemotePlayer#update id=#{@mp_id}", e) if defined?(mp_log_exception)
+    super
   end
 
-  # ─── Screen position (used by sprite) ──────────────────────────────────────
-
-  # Override to use our real_x/real_y directly (matches PE formula)
-  def screen_x
-    ((@real_x + Game_Map::REAL_RES_X / 2) / Game_Map::REAL_RES_X rescue
-     (@real_x + 128) / 256).to_i + 16
-  rescue
-    (@x || 0) * 32 + 16
-  end
-
-  def screen_y
-    ((@real_y + Game_Map::REAL_RES_Y / 2) / Game_Map::REAL_RES_Y rescue
-     (@real_y + 128) / 256).to_i + 32
-  rescue
-    (@y || 0) * 32 + 32
-  end
-
-  def screen_z(z = 0)
-    return z + 100 if @priority_type == 2
-    if @priority_type == 1 && $game_player
-      return z + (screen_y <= $game_player.screen_y ? 100 : 0)
-    end
-    z
-  rescue
-    z + 50
-  end
-
-  # ─── Appearance setters ────────────────────────────────────────────────────
+  # ─── Appearance setters (called from main thread) ──────────────────────────
 
   def set_character_graphic(name)
-    n = name.to_s
-    # Don't crash on missing charset — let the sprite handle it
+    return if name.nil?
+    n = name.to_s.strip
+    # FIX: reject numeric-only names like "1", "0" that the server sends
+    # and empty strings. Use a real charset name.
+    if n.empty? || n =~ /^\d+$/
+      n = detect_player_charset
+    end
     @character_name = n
     @character_hue  = 0
+    mp_log("SPRITE: set character graphic to '#{@character_name}'") if defined?(mp_log)
+  end
+
+  # Try to figure out what graphic the local player is using so remotes
+  # can use a sensible fallback.
+  def detect_player_charset
+    # Try $game_player character name first (most reliable in PE)
+    if $game_player && $game_player.character_name && !$game_player.character_name.empty?
+      return $game_player.character_name
+    end
+    # Fallback to known defaults based on gender
+    if $Trainer && $Trainer.respond_to?(:female?)
+      return $Trainer.female? ? "trchar004" : "trchar003"
+    end
+    # Ultimate fallback
+    "trchar003"
   end
 
   def set_direction(dir)
-    d = dir.to_i
-    @direction = d
-    @original_direction = d
+    @direction = dir.to_i
+    @original_direction = @direction
     @stop_count = 0
-    @data.direction = d
+    @data.direction = @direction
   end
 
-  # ─── Name sprite (main thread only) ────────────────────────────────────────
+  # ─── Name sprite ───────────────────────────────────────────────────────────
 
+  # Must be called from the main (game loop) thread.
   def create_name_sprite(viewport = nil)
     dispose_name_sprite
     return unless @mp_name
 
-    # PHASE 1: if rendering is disabled, skip name sprite too
-    return unless MP_ClientConfig::REMOTE_RENDERING_ENABLED
-
-    # Validate viewport thoroughly
-    if viewport.nil? || !viewport.respond_to?(:disposed?)
-      mp_log("NAME: skipped (nil viewport) id=#{@mp_id}") if defined?(mp_log)
-      return
-    end
-    if viewport.disposed?
-      mp_log("NAME: skipped (disposed viewport) id=#{@mp_id}") if defined?(mp_log)
-      return
-    end
-
     width  = 160
     height = 36
 
-    begin
-      bitmap = Bitmap.new(width, height)
+    bitmap = Bitmap.new(width, height)
 
-      # Shadow text
-      bitmap.font.size  = 16
-      bitmap.font.bold  = true
-      bitmap.font.color = Color.new(0, 0, 0, 180)
-      bitmap.draw_text(1, 1, width, 20, @mp_name.to_s, 1)
-      # Main text
-      bitmap.font.color = Color.new(255, 255, 255)
-      bitmap.draw_text(0, 0, width, 20, @mp_name.to_s, 1)
+    # Player name
+    bitmap.font.size  = 16
+    bitmap.font.bold  = true
+    bitmap.font.color = Color.new(255, 255, 255)
+    shadow_color      = Color.new(0, 0, 0, 180)
+    bitmap.font.color = shadow_color
+    bitmap.draw_text(1, 1, width, 20, @mp_name, 1)
+    bitmap.font.color = Color.new(255, 255, 255)
+    bitmap.draw_text(0, 0, width, 20, @mp_name, 1)
 
-      # Party display
-      pd = @data.party_display
-      if pd
-        species = pd["species"] || pd[:species]
-        level   = pd["level"]   || pd[:level]
-        if species && level
-          bitmap.font.size  = 12
-          bitmap.font.bold  = false
-          bitmap.font.color = Color.new(200, 220, 255)
-          bitmap.draw_text(0, 20, width, 16, "Lv.#{level} #{species}", 1)
-        end
+    # Party display (first Pokémon)
+    pd = @data.party_display
+    if pd
+      species = pd["species"] || pd[:species]
+      level   = pd["level"]   || pd[:level]
+      if species && level
+        bitmap.font.size  = 12
+        bitmap.font.bold  = false
+        bitmap.font.color = Color.new(200, 220, 255)
+        bitmap.draw_text(0, 20, width, 16, "Lv.#{level} #{species}", 1)
       end
-
-      @name_sprite = Sprite.new(viewport)
-      @name_sprite.bitmap = bitmap
-      @name_sprite.ox = width / 2
-      @name_sprite.oy = height
-      @name_sprite.z  = 5000
-      @name_valid = true
-      @name_viewport = viewport
-
-      mp_log("NAME: created id=#{@mp_id}") if defined?(mp_log)
-    rescue => e
-      mp_log_exception("NAME: create failed id=#{@mp_id}", e) if defined?(mp_log_exception)
-      dispose_name_sprite
     end
+
+    # FIX: use supplied viewport (passed in from overworld manager which has
+    # the correct map viewport). Fallback to nil (default/full-screen) if none.
+    @name_sprite    = Sprite.new(viewport)
+    @name_sprite.bitmap = bitmap
+    @name_sprite.ox = width / 2
+    @name_sprite.oy = height
+    @name_sprite.z  = 5000   # above tiles, below menus
   end
 
   def dispose_name_sprite
-    @name_valid = false
-    @name_viewport = nil
-
     if @name_sprite && !@name_sprite.disposed?
-      begin
-        if @name_sprite.bitmap && !@name_sprite.bitmap.disposed?
-          @name_sprite.bitmap.dispose
-        end
-      rescue
-        nil
-      end
-      begin
-        @name_sprite.dispose
-      rescue
-        nil
-      end
+      @name_sprite.bitmap.dispose if @name_sprite.bitmap && !@name_sprite.bitmap.disposed?
+      @name_sprite.dispose
     end
     @name_sprite = nil
-  rescue => e
-    mp_log_exception("NAME: dispose failed id=#{@mp_id}", e) if defined?(mp_log_exception)
-    @name_sprite = nil
-    @name_valid = false
   end
 
   def update_name_sprite_position
-    return unless @name_valid
     return unless @name_sprite && !@name_sprite.disposed?
-    return unless @name_sprite.bitmap && !@name_sprite.bitmap.disposed?
-
-    # Validate viewport every frame — it may have been disposed during
-    # map transition.
-    vp = @name_sprite.viewport
-    if vp && vp.respond_to?(:disposed?) && vp.disposed?
-      # Viewport was disposed — kill the name sprite and recreate next frame
-      mp_log("NAME: viewport disposed, cleaning up id=#{@mp_id}") if defined?(mp_log)
-      dispose_name_sprite
-      return
-    end
-
-    begin
-      @name_sprite.x       = screen_x
-      @name_sprite.y       = screen_y - 48
-      @name_sprite.visible = !@transparent && @data.visible
-    rescue => e
-      # Non-fatal: log once then stop trying
-      mp_log_exception("NAME: position update id=#{@mp_id}", e) if defined?(mp_log_exception)
-      dispose_name_sprite
-    end
+    return if @name_sprite.viewport && @name_sprite.viewport.disposed? rescue false
+    @name_sprite.x       = screen_x
+    @name_sprite.y       = screen_y - 48
+    @name_sprite.visible = !@transparent && @data.visible
   end
 
+  # Rebuild the name label (e.g. after party update).
   def refresh_name_sprite(viewport = nil)
-    vp = viewport || @name_viewport
-    return if vp && vp.respond_to?(:disposed?) && vp.disposed?
+    vp = (viewport || (@name_sprite&.viewport))
     create_name_sprite(vp)
   end
 
@@ -279,22 +182,5 @@ class MP_Game_RemotePlayer < Game_Character
 
   def dispose
     dispose_name_sprite
-  rescue => e
-    mp_log_exception("MP_Game_RemotePlayer#dispose id=#{@mp_id}", e) if defined?(mp_log_exception)
-  end
-
-  # Visibility used by culling
-  def visible
-    @data.visible
-  end
-
-  def visible=(v)
-    @data.visible = v
-  end
-
-  # bush_depth for sprite integration
-  def bush_depth
-    0
   end
 end
-

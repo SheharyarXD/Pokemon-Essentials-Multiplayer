@@ -24,11 +24,6 @@
 #   * SYMBOL KEYS: All outbound payload hashes use string keys consistently.
 #   * DUPLICATE MAP_CHANGE: send_map_change flag prevents double-sending.
 #   * DISCONNECT CLEANUP: on_disconnect triggers MP_OverworldManager.on_disconnect.
-#   * CLIENT HEARTBEAT: server only refreshes last_heartbeat when it *receives*
-#     HEARTBEAT from the client. This client now sends periodic pings on the net
-#     thread so menus / missed map ticks cannot cause server-side timeout.
-#   * NO HEARTBEAT ECHO: echoing every inbound HEARTBEAT caused infinite
-#     client↔server ping-pong; inbound packets only update LAST_SEEN diagnostics.
 #===============================================================================
 
 begin
@@ -39,7 +34,6 @@ end
 require "json"
 
 module MP_NetworkManager
-  module_function
 
   STATE_DISCONNECTED = 0
   STATE_CONNECTING   = 1
@@ -70,12 +64,6 @@ module MP_NetworkManager
 
   @queue_overflow_count = 0
 
-  # Heartbeat / diagnostics (updated on net thread + main thread)
-  @last_heartbeat_sent = nil
-  @last_heartbeat_recv = nil
-  @diag_frame          = 0
-  @last_move_log_at    = nil
-
   # ── Public state ────────────────────────────────────────────────────────────
 
   def connected?;  @state == STATE_CONNECTED;  end
@@ -87,34 +75,10 @@ module MP_NetworkManager
     %w[DISCONNECTED CONNECTING HANDSHAKING CONNECTED][@state] || "UNKNOWN"
   end
 
-  def diagnostics_text
-    eq, sq = @mutex.synchronize { [@event_queue.length, @send_queue.length] }
-    sock = @socket && !@socket.closed?
-    thr  = @net_thread&.alive?
-    hb_s = @last_heartbeat_sent ? format("%.2fs ago", Time.now - @last_heartbeat_sent) : "never"
-    hb_r = @last_heartbeat_recv ? format("%.2fs ago", Time.now - @last_heartbeat_recv) : "never"
-    map  = ($game_map.map_id rescue "n/a")
-    [
-      "state=#{@state} (#{state_name}) running=#{@running}",
-      "thread_alive=#{thr} socket_open=#{sock}",
-      "send_q=#{sq} event_q=#{eq}",
-      "heartbeat_sent=#{hb_s} heartbeat_recv=#{hb_r}",
-      "map_id=#{map} client_id=#{@client_id.inspect}"
-    ].join(" | ")
-  end
-
   # ── Lifecycle ───────────────────────────────────────────────────────────────
 
   def start
-    if @running && @net_thread&.alive?
-      mp_log("NET: start skipped (singleton already running)") if defined?(mp_log) && mp_diag_network?
-      return
-    end
-    # Stale thread from a crash or partial stop
-    if @net_thread&.alive?
-      mp_log("NET: start — stopping stale net thread before restart") if defined?(mp_log) && mp_diag_network?
-      stop
-    end
+    return if @running
     @running             = true
     @state               = STATE_DISCONNECTED
     @reconnect_attempts  = 0
@@ -123,10 +87,6 @@ module MP_NetworkManager
     @event_queue.clear
     @receive_buffer      = "".b
     @queue_overflow_count= 0
-    @last_heartbeat_sent = nil
-    @last_heartbeat_recv = nil
-    @last_move_log_at    = nil
-    @diag_frame          = 0
     mp_log("NET: start") if defined?(mp_log)
     @net_thread = Thread.new { net_loop }
   end
@@ -134,34 +94,24 @@ module MP_NetworkManager
   def stop
     @running = false
     close_socket
-    t = @net_thread
+    @net_thread&.kill
     @net_thread = nil
-    if t&.alive?
-      t.kill
-      t.join(1.0) rescue nil
-    end
     @state = STATE_DISCONNECTED
-    @client_id = nil
-    @last_heartbeat_sent = nil
-    @last_heartbeat_recv = nil
     mp_log("NET: stopped") if defined?(mp_log)
   end
 
   # ── Game-loop side ──────────────────────────────────────────────────────────
 
   # Called every frame from Scene_Map#update (main thread).
-  # Dispatches inbound events first so handlers can enqueue replies, then drains
-  # send queue (twice so :connect → MAP_CHANGE flushes same frame).
+  # Flushes outbound queue, then dispatches all pending inbound events to handlers.
   def tick
-    ev_n = dispatch_events
-    out_n = process_outgoing + process_outgoing
-    net_diag_tick(ev_n, out_n)
+    process_outgoing
+    dispatch_events
   end
 
   # Push an outbound packet (safe to call from any thread).
   def send_packet(type, payload = {})
     return unless @state == STATE_CONNECTED
-    log_outbound_packet(type, payload)
     @mutex.synchronize do
       if @send_queue.length > 500
         @send_queue.shift(250)
@@ -190,12 +140,6 @@ module MP_NetworkManager
     @error_handlers.clear
   end
 
-  def mp_diag_network?
-    MP_ClientConfig::NETWORK_DIAGNOSTICS
-  rescue NameError
-    false
-  end
-
   # ── Party helper ────────────────────────────────────────────────────────────
 
   def send_party_data
@@ -212,24 +156,25 @@ module MP_NetworkManager
 
   def net_loop
     while @running
-      case @state
-      when STATE_DISCONNECTED
-        if MP_ClientConfig::RECONNECT_ENABLED
-          attempt_connect
-        else
-          sleep(1)
+      begin
+        case @state
+        when STATE_DISCONNECTED
+          if MP_ClientConfig::RECONNECT_ENABLED
+            attempt_connect
+          else
+            sleep(1)
+          end
+        when STATE_HANDSHAKING, STATE_CONNECTED
+          receive_data
+          sleep(0.001)   # yield; outbound is handled by game-loop tick
+        when STATE_CONNECTING
+          sleep(0.01)
         end
-      when STATE_HANDSHAKING, STATE_CONNECTED
-        maybe_send_client_heartbeat if @state == STATE_CONNECTED
-        receive_data
-        sleep(0.001)   # yield; outbound is handled by game-loop tick
-      when STATE_CONNECTING
-        sleep(0.01)
+      rescue => e
+        mp_log("NET: net_loop error #{e.class}: #{e.message}") if defined?(mp_log)
+        sleep(1)
       end
     end
-  rescue => e
-    mp_log("NET: net_loop crashed: #{e.class}: #{e.message}") if defined?(mp_log)
-    @running = false
   end
 
   # ── Connect / handshake ────────────────────────────────────────────────────
@@ -242,9 +187,12 @@ module MP_NetworkManager
       return
     end
 
-    close_socket
     @reconnect_attempts += 1
     @state = STATE_CONNECTING
+    # FIX: clear stale buffers so old connection data doesn't corrupt new one
+    @receive_buffer = "".b
+    @send_queue.clear
+    @event_queue.clear
     mp_log("NET: connecting (attempt #{@reconnect_attempts})") if defined?(mp_log)
 
     begin
@@ -301,7 +249,6 @@ module MP_NetworkManager
   end
 
   def backoff_and_reset
-    mp_log("NET: reconnect backoff #{@reconnect_delay}s before next attempt") if defined?(mp_log)
     sleep(@reconnect_delay)
     @reconnect_delay = [@reconnect_delay * MP_ClientConfig::RECONNECT_BACKOFF_MULTIPLIER,
                         MP_ClientConfig::RECONNECT_MAX_INTERVAL].min
@@ -329,53 +276,62 @@ module MP_NetworkManager
 
   def process_buffer
     while @receive_buffer.bytesize >= MP_Packet::HEADER_SIZE
-      length     = @receive_buffer[2, 2].unpack1("n")
-      total_size = MP_Packet::HEADER_SIZE + length
-      break if @receive_buffer.bytesize < total_size
+      begin
+        length     = @receive_buffer[2, 2].unpack1("n")
+        total_size = MP_Packet::HEADER_SIZE + length
+        break if @receive_buffer.bytesize < total_size
 
-      raw    = @receive_buffer[0, total_size]
-      # FIX: use slice assignment to preserve binary encoding on buffer
-      @receive_buffer = @receive_buffer.byteslice(total_size, @receive_buffer.bytesize - total_size) || "".b
-
-      packet = MP_Packet.decode(raw)
-      next unless packet
-
-      if MP_ClientConfig::DEBUG_PACKETS
-        mp_log("IN  #{packet.type_name}") if defined?(mp_log)
-      end
-
-      # Handle handshake/error on this thread immediately (no game-state changes needed)
-      case packet.type
-      when MP_PacketType::HANDSHAKE_ACK
-        @client_id         = packet.payload["client_id"]
-        @state             = STATE_CONNECTED
-        @reconnect_attempts= 0
-        @reconnect_delay   = MP_ClientConfig::RECONNECT_BASE_INTERVAL
-        mp_log("NET: HANDSHAKE_ACK, client_id=#{@client_id}") if defined?(mp_log)
-        push_event(:connect, packet.payload)
-
-      when MP_PacketType::ERROR
-        msg = packet.payload["message"] || "Unknown server error"
-        mp_log("NET: ERROR from server: #{msg}") if defined?(mp_log)
-        push_event(:error, msg)
-        # Fatal errors — stop reconnecting
-        if msg.include?("Version mismatch") || msg.include?("Invalid player name") ||
-           msg.include?("already logged in")
-          @running = false
-          close_socket
+        # FIX: sanity-check length to detect buffer desync
+        if length > 100_000
+          mp_log("NET: packet length #{length} looks bogus, dropping 1 byte to resync") if defined?(mp_log)
+          @receive_buffer = @receive_buffer.byteslice(1, @receive_buffer.bytesize - 1) || "".b
+          next
         end
 
-      when MP_PacketType::HEARTBEAT
-        # Server echoes our periodic ping — do NOT send_raw again (infinite ping-pong).
-        @last_heartbeat_recv = Time.now
-        if mp_diag_network?
-          mp_log("NET: HEARTBEAT RECEIVED ts=#{packet.payload['ts'].inspect}") if defined?(mp_log)
-          mp_log("NET: LAST_SEEN UPDATED (server echo) at #{@last_heartbeat_recv.strftime('%H:%M:%S.%L')}") if defined?(mp_log)
+        raw    = @receive_buffer[0, total_size]
+        # FIX: use slice assignment to preserve binary encoding on buffer
+        @receive_buffer = @receive_buffer.byteslice(total_size, @receive_buffer.bytesize - total_size) || "".b
+
+        packet = MP_Packet.decode(raw)
+        next unless packet
+
+        if MP_ClientConfig::DEBUG_PACKETS
+          mp_log("IN  #{packet.type_name}") if defined?(mp_log)
         end
 
-      else
-        # All other packets are deferred to the game loop thread
-        push_event(:packet, packet)
+        # Handle handshake/error on this thread immediately (no game-state changes needed)
+        case packet.type
+        when MP_PacketType::HANDSHAKE_ACK
+          @client_id         = packet.payload["client_id"]
+          @state             = STATE_CONNECTED
+          @reconnect_attempts= 0
+          @reconnect_delay   = MP_ClientConfig::RECONNECT_BASE_INTERVAL
+          mp_log("NET: HANDSHAKE_ACK, client_id=#{@client_id}") if defined?(mp_log)
+          push_event(:connect, packet.payload)
+
+        when MP_PacketType::ERROR
+          msg = packet.payload["message"] || "Unknown server error"
+          mp_log("NET: ERROR from server: #{msg}") if defined?(mp_log)
+          push_event(:error, msg)
+          # Fatal errors — stop reconnecting
+          if msg.include?("Version mismatch") || msg.include?("Invalid player name") ||
+             msg.include?("already logged in")
+            @running = false
+            close_socket
+          end
+
+        when MP_PacketType::HEARTBEAT
+          # Echo back ts for RTT. Don't queue — handle immediately.
+          send_raw(MP_Packet.new(MP_PacketType::HEARTBEAT, { "ts" => packet.payload["ts"] }))
+
+        else
+          # All other packets are deferred to the game loop thread
+          push_event(:packet, packet)
+        end
+      rescue => e
+        mp_log("NET: process_buffer error #{e.class}: #{e.message}") if defined?(mp_log)
+        # Drop one byte to try to resync stream
+        @receive_buffer = @receive_buffer.byteslice(1, @receive_buffer.bytesize - 1) || "".b
       end
     end
   end
@@ -383,9 +339,8 @@ module MP_NetworkManager
   # ── Send ──────────────────────────────────────────────────────────────────
 
   # Drain the outbound queue. Called from main-thread tick().
-  # Returns number of packets written this call.
   def process_outgoing
-    return 0 unless @socket && !@socket.closed?
+    return unless @socket && !@socket.closed?
     to_send = @mutex.synchronize { @send_queue.shift([@send_queue.length, 50].min) }
     to_send.each do |packet|
       if MP_ClientConfig::DEBUG_PACKETS
@@ -393,7 +348,6 @@ module MP_NetworkManager
       end
       send_raw(packet)
     end
-    to_send.length
   end
 
   # Write directly to socket (called from net_thread for handshake/heartbeat,
@@ -403,8 +357,8 @@ module MP_NetworkManager
     begin
       data = packet.encode  # returns ASCII-8BIT .b string
       @socket.write(data)   # use blocking write; non-blocking was causing silent data loss
-    rescue Errno::EPIPE, Errno::ECONNRESET, IOError => e
-      on_disconnected("Send error: #{e.class}")
+    rescue => e
+      on_disconnected("Send error: #{e.class}: #{e.message}")
     end
   end
 
@@ -420,7 +374,6 @@ module MP_NetworkManager
 
   # Dispatches all pending events to registered handlers.
   # Always called from the main (game loop) thread.
-  # Returns number of events processed (for diagnostics).
   def dispatch_events
     events = @mutex.synchronize { @event_queue.shift(@event_queue.length) }
     events.each do |kind, data|
@@ -441,7 +394,6 @@ module MP_NetworkManager
         handlers.each { |cb| cb.call(data.payload) rescue nil }
       end
     end
-    events.length
   end
 
   def initial_player_data
@@ -455,55 +407,6 @@ module MP_NetworkManager
     send_party_data
   end
 
-  private
-
-  # Periodic client→server ping on the net thread (survives Scene_Map not ticking).
-  def maybe_send_client_heartbeat
-    return unless @socket && !@socket.closed?
-    interval = MP_ClientConfig::CLIENT_HEARTBEAT_INTERVAL
-    now = Time.now
-    if @last_heartbeat_sent.nil? || (now - @last_heartbeat_sent) >= interval
-      @last_heartbeat_sent = now
-      ts = (now.to_f * 1000).to_i
-      send_raw(MP_Packet.new(MP_PacketType::HEARTBEAT, { "ts" => ts }))
-      mp_log("NET: HEARTBEAT SENT ts=#{ts}") if defined?(mp_log) && mp_diag_network?
-    end
-  end
-
-  def net_diag_tick(events_processed, packets_sent)
-    return unless mp_diag_network?
-    intv = MP_ClientConfig::NETWORK_DIAG_TICK_INTERVAL
-    @diag_frame += 1
-    return unless @diag_frame % intv == 0
-    eq, sq = @mutex.synchronize { [@event_queue.length, @send_queue.length] }
-    thr = @net_thread&.alive?
-    sock = @socket && !@socket.closed?
-    hb_r = @last_heartbeat_recv ? format("%.2f", Time.now - @last_heartbeat_recv) : "—"
-    mp_log("NET: DIAG TICK events_dispatched=#{events_processed} send_writes=#{packets_sent} event_q=#{eq} send_q=#{sq} state=#{state_name} thread=#{thr} sock=#{sock} hb_recv_ago=#{hb_r}s") if defined?(mp_log)
-    warn_after = MP_ClientConfig::HEARTBEAT_WARN_AFTER
-    hint = MP_ClientConfig::SERVER_DISCONNECT_TIMEOUT_HINT
-    if @last_heartbeat_recv && (Time.now - @last_heartbeat_recv) > warn_after
-      mp_log("NET: TIMEOUT CHECK — no HEARTBEAT echo for #{(Time.now - @last_heartbeat_recv).round(1)}s (server drops ~#{hint}s)") if defined?(mp_log)
-    end
-  end
-
-  def log_outbound_packet(type, payload)
-    return unless mp_diag_network?
-    case type
-    when MP_PacketType::MAP_CHANGE
-      mp_log("NET: MAP_CHANGE SENT map_id=#{payload['map_id']} x=#{payload['x']} y=#{payload['y']}") if defined?(mp_log)
-    when MP_PacketType::PLAYER_MOVE
-      throttle = MP_ClientConfig::NETWORK_DIAG_MOVEMENT_THROTTLE
-      t = Time.now
-      if @last_move_log_at.nil? || (t - @last_move_log_at) >= throttle
-        @last_move_log_at = t
-        mp_log("NET: PLAYER_MOVE SENT x=#{payload['x']} y=#{payload['y']} dir=#{payload['direction']}") if defined?(mp_log)
-      end
-    end
-  end
-
-  public
-
   # ── Disconnect ────────────────────────────────────────────────────────────
 
   def on_disconnected(reason)
@@ -512,8 +415,6 @@ module MP_NetworkManager
     old_state = @state
     @state     = STATE_DISCONNECTED
     @client_id = nil
-    @last_heartbeat_sent = nil
-    @last_heartbeat_recv = nil
     close_socket
     push_event(:disconnect, reason) if old_state == STATE_CONNECTED
   end
@@ -526,4 +427,5 @@ module MP_NetworkManager
     end
     @socket = nil
   end
+  extend self
 end
