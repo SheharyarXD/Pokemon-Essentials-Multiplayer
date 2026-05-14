@@ -1,37 +1,61 @@
 #===============================================================================
 #  Pokemon Pathways Multiplayer Client - Remote Player Sprite
+#  STABILIZED v2.1 — Safe Sprite_Character subclass with rescue guards
 #
-#  Thin subclass of Sprite_Character used by the existing Spriteset_Map
-#  render pipeline. The base class handles all tile-offset, animation-frame,
-#  and z-depth calculations automatically, so we just need to hook dispose.
-#
-#  FIXES vs original:
-#   * Removed Spriteset_Map.viewport class-method call (doesn't exist in PE v19.1).
-#     The viewport is now passed in by MP_OverworldManager which holds a reference.
-#   * dispose now calls MP_Game_RemotePlayer#dispose to clean up the name sprite.
+#  Thin subclass of Sprite_Character used by Spriteset_Map render pipeline.
+#  Base class handles tile-offset, animation-frame, and z-depth.
+#  We add safe dispose and update guards to prevent crashes from stale
+#  viewport or missing charset bitmap.
 #===============================================================================
 
 class Sprite_MP_RemotePlayer < Sprite_Character
-  # @param viewport [Viewport]            the map's tile viewport
-  # @param character [MP_Game_RemotePlayer]
   def initialize(viewport, character)
-    super(viewport, character)
     @mp_character = character
+    @mp_safe_init = false
+    begin
+      super(viewport, character)
+      @mp_safe_init = true
+      mp_log("SPRITE: Sprite_MP_RemotePlayer created for #{character.mp_name}") if MP_ClientConfig::DEBUG_SPRITES && defined?(mp_log)
+    rescue => e
+      mp_log("SPRITE: init error #{e.class}: #{e.message} — using placeholder") if defined?(mp_log)
+      @character = character
+      @viewport  = viewport
+      @mp_safe_init = false
+      create_placeholder_bitmap(viewport)
+    end
   end
 
   def update
     return if @character.nil?
-    super
-    # Name sprite position is updated inside MP_Game_RemotePlayer#update
-    # via update_name_sprite_position, so nothing extra needed here.
-  rescue => e
-    # Prevent a sprite update crash from killing the whole spriteset update loop
-    mp_log("SPRITE: update error #{e.class}: #{e.message}") if defined?(mp_log)
+    begin
+      super
+    rescue => e
+      mp_log("SPRITE: update error #{e.class}: #{e.message}") if defined?(mp_log)
+    end
   end
 
   def dispose
-    # Dispose the character's name sprite first (must happen on main thread)
-    @mp_character.dispose if @mp_character.respond_to?(:dispose)
-    super
+    begin
+      @mp_character.dispose if @mp_character.respond_to?(:dispose)
+    rescue => e
+      mp_log("SPRITE: dispose character error #{e.class}: #{e.message}") if defined?(mp_log)
+    end
+    begin
+      super
+    rescue => e
+      mp_log("SPRITE: dispose super error #{e.class}: #{e.message}") if defined?(mp_log)
+    end
+  end
+
+  private
+
+  def create_placeholder_bitmap(viewport)
+    begin
+      @bitmap = Bitmap.new(32, 48)
+      @bitmap.fill_rect(0, 0, 32, 48, Color.new(255, 0, 255, 128))
+      self.bitmap = @bitmap if respond_to?(:bitmap=)
+    rescue => e
+      mp_log("SPRITE: placeholder bitmap failed #{e.class}: #{e.message}") if defined?(mp_log)
+    end
   end
 end

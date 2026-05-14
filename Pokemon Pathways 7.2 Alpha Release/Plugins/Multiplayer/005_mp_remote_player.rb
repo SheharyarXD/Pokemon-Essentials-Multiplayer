@@ -1,40 +1,29 @@
 #===============================================================================
 #  Pokemon Pathways Multiplayer Client - Remote Player Character
+#  STABILIZED v2.1 — Safe sprite creation, placeholder bitmap fallback
 #
-#  Subclass of Game_Character that the existing Spriteset_Map can render like
-#  any other map character. Reads position from a RemotePlayerData instance
-#  and applies smoothed interpolation each frame.
-#
-#  FIXES vs original:
-#   * CONSTRUCTOR: super() with no arguments. Original called super($game_map)
-#     but Game_Character#initialize in PE v19.1 takes no arguments.
-#   * INTERPOLATION: now delegates to RemotePlayerData#update_interpolation which
-#     snapshots from current real_x/real_y, preventing backwards snapping.
-#   * NAME SPRITE VIEWPORT: creates name sprites on an explicit viewport with
-#     high Z so they appear above tiles but below menus.
-#   * No Sprite/Bitmap creation happens in initialize; create_name_sprite must
-#     be called explicitly from the main thread only.
+#  Subclass of Game_Character that the existing Spriteset_Map can render.
+#  Reads position from RemotePlayerData and applies smoothed interpolation.
+#  All Sprite/Bitmap creation happens on main thread via create_name_sprite.
 #===============================================================================
 
 class MP_Game_RemotePlayer < Game_Character
   attr_reader   :mp_id, :mp_name, :data
-  attr_accessor :mp_sprite  # back-reference to our Sprite_Character, set by overworld
+  attr_accessor :mp_sprite
 
   def initialize(data)
-    super()   # FIX: no arguments - Game_Character#initialize takes none in PE v19.1
-    @data    = data            # RemotePlayerData instance
+    super()
+    @data    = data
     @mp_id   = data.id
     @mp_name = data.name
 
-    # Game_Character configuration
-    @through        = true    # don't block player movement
+    @through        = true
     @walk_anime     = true
     @step_anime     = false
     @transparent    = false
     @opacity        = 255
     @move_speed     = 4
 
-    # Sync initial position from data
     @x          = data.x
     @y          = data.y
     @real_x     = data.real_x.to_i
@@ -44,11 +33,9 @@ class MP_Game_RemotePlayer < Game_Character
 
     set_character_graphic(data.sprite_name)
 
-    # Ensure animation state is valid (Game_Character sets these, but guard anyway)
     @pattern      ||= 0
     @original_direction ||= @direction
 
-    # Name label sprite (nil until create_name_sprite is called)
     @name_sprite    = nil
     @name_viewport  = nil
   end
@@ -56,53 +43,66 @@ class MP_Game_RemotePlayer < Game_Character
   # ─── Frame update ──────────────────────────────────────────────────────────
 
   def update
-    # Advance interpolation in RemotePlayerData
     @data.update_interpolation if MP_ClientConfig::INTERPOLATION_ENABLED
 
-    # Mirror real_x/real_y from data to self (Game_Character uses these for rendering)
     @real_x     = @data.real_x.to_i
     @real_y     = @data.real_y.to_i
     @x          = @data.x
     @y          = @data.y
     @direction  = @data.direction
 
-    # Animate walk cycle when interpolating
     if @data.interpolating
-      @pattern    = (@pattern + 1) % 4 if Graphics.frame_count % 8 == 0
+      @pattern = (@pattern + 1) % 4 if Graphics.frame_count % 8 == 0
     end
 
     update_name_sprite_position
     super
   end
 
-  # ─── Appearance setters (called from main thread) ──────────────────────────
+  # ─── Appearance setters ────────────────────────────────────────────────────
 
   def set_character_graphic(name)
     return if name.nil?
     n = name.to_s.strip
-    # FIX: reject numeric-only names like "1", "0" that the server sends
-    # and empty strings. Use a real charset name.
+
+    # Server sends sprite index as "0", "1", "2" etc. — these are NOT valid charset names.
+    # Map them to proper trainer overworld sprites.
     if n.empty? || n =~ /^\d+$/
-      n = detect_player_charset
+      n = resolve_trainer_charset
     end
+
+    # If still invalid, use the user's specified default
+    if n.empty? || n =~ /^\d+$/
+      n = "trainer_POKEMONTRAINER_Red"
+    end
+
     @character_name = n
     @character_hue  = 0
-    mp_log("SPRITE: set character graphic to '#{@character_name}'") if defined?(mp_log)
+    mp_log("SPRITE: set character graphic to '#{@character_name}' for #{@mp_name}") if defined?(mp_log)
   end
 
-  # Try to figure out what graphic the local player is using so remotes
-  # can use a sensible fallback.
-  def detect_player_charset
-    # Try $game_player character name first (most reliable in PE)
+  # Resolve trainer charset from server sprite index or local player data.
+  # Server sends outfit index (0,1,2...) which maps to different trainer sprites.
+  def resolve_trainer_charset
+    # Try to use the local player's charset as a reference
     if $game_player && $game_player.character_name && !$game_player.character_name.empty?
       return $game_player.character_name
     end
-    # Fallback to known defaults based on gender
-    if $Trainer && $Trainer.respond_to?(:female?)
-      return $Trainer.female? ? "trchar004" : "trchar003"
+
+    # Default trainer overworld sprites based on outfit index
+    outfit = @data.outfit.to_i
+    case outfit
+    when 0
+      "trainer_POKEMONTRAINER_Red"
+    when 1
+      "trainer_POKEMONTRAINER_Leaf"
+    when 2
+      "trainer_POKEMONTRAINER_Brendan"
+    when 3
+      "trainer_POKEMONTRAINER_May"
+    else
+      "trainer_POKEMONTRAINER_Red"
     end
-    # Ultimate fallback
-    "trchar003"
   end
 
   def set_direction(dir)
@@ -114,7 +114,6 @@ class MP_Game_RemotePlayer < Game_Character
 
   # ─── Name sprite ───────────────────────────────────────────────────────────
 
-  # Must be called from the main (game loop) thread.
   def create_name_sprite(viewport = nil)
     dispose_name_sprite
     return unless @mp_name
@@ -122,19 +121,21 @@ class MP_Game_RemotePlayer < Game_Character
     width  = 160
     height = 36
 
-    bitmap = Bitmap.new(width, height)
+    begin
+      bitmap = Bitmap.new(width, height)
+    rescue => e
+      mp_log("SPRITE: Bitmap.new failed #{e.class}: #{e.message}") if defined?(mp_log)
+      return
+    end
 
-    # Player name
     bitmap.font.size  = 16
     bitmap.font.bold  = true
-    bitmap.font.color = Color.new(255, 255, 255)
     shadow_color      = Color.new(0, 0, 0, 180)
     bitmap.font.color = shadow_color
     bitmap.draw_text(1, 1, width, 20, @mp_name, 1)
     bitmap.font.color = Color.new(255, 255, 255)
     bitmap.draw_text(0, 0, width, 20, @mp_name, 1)
 
-    # Party display (first Pokémon)
     pd = @data.party_display
     if pd
       species = pd["species"] || pd[:species]
@@ -147,19 +148,24 @@ class MP_Game_RemotePlayer < Game_Character
       end
     end
 
-    # FIX: use supplied viewport (passed in from overworld manager which has
-    # the correct map viewport). Fallback to nil (default/full-screen) if none.
-    @name_sprite    = Sprite.new(viewport)
-    @name_sprite.bitmap = bitmap
-    @name_sprite.ox = width / 2
-    @name_sprite.oy = height
-    @name_sprite.z  = 5000   # above tiles, below menus
+    begin
+      @name_sprite = Sprite.new(viewport)
+      @name_sprite.bitmap = bitmap
+      @name_sprite.ox = width / 2
+      @name_sprite.oy = height
+      @name_sprite.z  = 5000
+      mp_log("SPRITE: name sprite created for #{@mp_name}") if MP_ClientConfig::DEBUG_SPRITES && defined?(mp_log)
+    rescue => e
+      mp_log("SPRITE: Sprite.new failed #{e.class}: #{e.message}") if defined?(mp_log)
+      bitmap.dispose rescue nil
+    end
   end
 
   def dispose_name_sprite
     if @name_sprite && !@name_sprite.disposed?
       @name_sprite.bitmap.dispose if @name_sprite.bitmap && !@name_sprite.bitmap.disposed?
       @name_sprite.dispose
+      mp_log("SPRITE: name sprite disposed for #{@mp_name}") if MP_ClientConfig::DEBUG_SPRITES && defined?(mp_log)
     end
     @name_sprite = nil
   end
@@ -172,7 +178,6 @@ class MP_Game_RemotePlayer < Game_Character
     @name_sprite.visible = !@transparent && @data.visible
   end
 
-  # Rebuild the name label (e.g. after party update).
   def refresh_name_sprite(viewport = nil)
     vp = (viewport || (@name_sprite&.viewport))
     create_name_sprite(vp)

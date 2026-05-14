@@ -2,6 +2,7 @@
 #  MP DIAGNOSTIC
 #  Writes timestamped log entries to console (echoln) and mp_debug.txt.
 #  Safe to load before any other MP module is defined.
+#  STABILIZED v2.1 — Removed Scene_Map#main alias conflict
 #===============================================================================
 
 def mp_log(msg)
@@ -26,20 +27,8 @@ mp_log("DIAG: Multiplayer plugin loaded")
 mp_log("DIAG: Ruby version      = #{RUBY_VERSION}")
 mp_log("DIAG: TCPSocket defined = #{defined?(TCPSocket) ? 'YES' : 'NO'}")
 
-class Scene_Map
-  unless method_defined?(:mp_diag_main)
-    alias_method :mp_diag_main, :main
-  end
+# NOTE: We intentionally do NOT hook Scene_Map#main here.
+# The 008_mp_hooks.rb file handles all Scene_Map hooks.
+# Hooking main in multiple files creates double-alias chains that crash.
 
-  def main
-    mp_log("DIAG: Scene_Map#main entered")
-    mp_log("DIAG: $Trainer   = #{$Trainer ? $Trainer.name : 'NIL'}")
-    mp_log("DIAG: $game_map  = #{$game_map ? $game_map.map_id : 'NIL'}")
-    mp_log("DIAG: $game_player = #{$game_player ? 'SET' : 'NIL'}")
-    mp_diag_main
-  ensure
-    mp_log("DIAG: Scene_Map#main exited")
-  end
-end
-
-mp_log("DIAG: Scene_Map diagnostic hook installed")
+mp_log("DIAG: Diagnostic module loaded — Scene_Map hooks delegated to 008_mp_hooks.rb")

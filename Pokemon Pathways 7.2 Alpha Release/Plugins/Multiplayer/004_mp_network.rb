@@ -1,29 +1,12 @@
 #===============================================================================
 #  Pokemon Pathways Multiplayer Client - Network Manager
+#  STABILIZED v2.1 — Dedicated heartbeat thread, session singleton bootstrap
 #
-#  Manages the TCP connection to the game server on a dedicated background
-#  thread. The main game loop interacts with the manager via two thread-safe
-#  queues:
-#
-#    @send_queue    — game loop pushes outbound packets; network thread drains
-#    @event_queue   — network thread pushes incoming events; game loop processes
-#
-#  WHY TWO QUEUES?
-#  All MKXP-Z/RPG Maker graphics objects (Sprite, Bitmap, Viewport) must be
-#  created and disposed on the main thread. By deferring incoming packet
-#  handling to the game loop (via @event_queue), we guarantee that packet
-#  handlers that touch game state or UI always run on the correct thread.
-#
-#  FIXES vs original:
-#   * ENCODING: @receive_buffer forced to ASCII-8BIT (.b). Original was UTF-8;
-#     Socket#read_nonblock returns ASCII-8BIT; += raised Encoding::CompatibilityError.
-#   * THREAD SAFETY: Callbacks NO LONGER fire on the receive thread.
-#     Incoming events are enqueued and dispatched on the game loop thread by
-#     MP_NetworkManager.dispatch_events (called from Scene_Map#update).
-#   * HEARTBEAT: now includes a "ts" field so the server can echo it back for RTT.
-#   * SYMBOL KEYS: All outbound payload hashes use string keys consistently.
-#   * DUPLICATE MAP_CHANGE: send_map_change flag prevents double-sending.
-#   * DISCONNECT CLEANUP: on_disconnect triggers MP_OverworldManager.on_disconnect.
+#  Architecture:
+#    * Background net_thread handles TCP read + handshake + heartbeat echo
+#    * Dedicated heartbeat_thread sends outbound heartbeats every 5s
+#    * Main-thread tick() drains outbound queue + dispatches inbound events
+#    * All graphics/UI code runs on main thread via event_queue
 #===============================================================================
 
 begin
@@ -41,28 +24,28 @@ module MP_NetworkManager
   STATE_CONNECTED    = 3
 
   @socket              = nil
-  @net_thread          = nil          # single background thread
+  @net_thread          = nil
+  @heartbeat_thread    = nil
   @running             = false
+  @stop_requested      = false
   @state               = STATE_DISCONNECTED
   @client_id           = nil
   @reconnect_attempts  = 0
   @reconnect_delay     = 1.0
 
-  # FIX: ASCII-8BIT receive buffer (socket always returns ASCII-8BIT)
   @receive_buffer      = "".b
-
-  # Thread-safe queues (Array used as queue; protected by @mutex)
   @send_queue          = []
-  @event_queue         = []           # populated by net thread, drained by game loop
+  @event_queue         = []
   @mutex               = Mutex.new
 
-  # Registered handlers: type => [Proc, ...]
   @packet_handlers     = {}
   @connect_handlers    = []
   @disconnect_handlers = []
   @error_handlers      = []
 
   @queue_overflow_count = 0
+  @last_heartbeat_sent  = 0
+  @last_heartbeat_rcvd  = 0
 
   # ── Public state ────────────────────────────────────────────────────────────
 
@@ -80,6 +63,7 @@ module MP_NetworkManager
   def start
     return if @running
     @running             = true
+    @stop_requested      = false
     @state               = STATE_DISCONNECTED
     @reconnect_attempts  = 0
     @reconnect_delay     = MP_ClientConfig::RECONNECT_BASE_INTERVAL
@@ -87,23 +71,27 @@ module MP_NetworkManager
     @event_queue.clear
     @receive_buffer      = "".b
     @queue_overflow_count= 0
-    mp_log("NET: start") if defined?(mp_log)
+    @last_heartbeat_sent = 0
+    @last_heartbeat_rcvd = Time.now.to_f
+    mp_log("NET: start — background threads launching") if defined?(mp_log)
     @net_thread = Thread.new { net_loop }
+    @heartbeat_thread = Thread.new { heartbeat_loop }
   end
 
   def stop
+    @stop_requested = true
     @running = false
     close_socket
     @net_thread&.kill
     @net_thread = nil
+    @heartbeat_thread&.kill
+    @heartbeat_thread = nil
     @state = STATE_DISCONNECTED
     mp_log("NET: stopped") if defined?(mp_log)
   end
 
-  # ── Game-loop side ──────────────────────────────────────────────────────────
+  # ── Game-loop side (called every frame from Scene_Map#update) ─────────────
 
-  # Called every frame from Scene_Map#update (main thread).
-  # Flushes outbound queue, then dispatches all pending inbound events to handlers.
   def tick
     process_outgoing
     dispatch_events
@@ -122,7 +110,7 @@ module MP_NetworkManager
     end
   end
 
-  # ── Callback registration ───────────────────────────────────────────────────
+  # ── Callback registration ─────────────────────────────────────────────────
 
   def on_packet(type, &block)
     @packet_handlers[type] ||= []
@@ -154,7 +142,34 @@ module MP_NetworkManager
 
   private
 
+  def heartbeat_loop
+    mp_log("NET: heartbeat thread started") if defined?(mp_log)
+    loop do
+      break if @stop_requested
+      begin
+        if @state == STATE_CONNECTED && @socket && !@socket.closed?
+          now = Time.now.to_f
+          if now - @last_heartbeat_sent >= MP_ClientConfig::HEARTBEAT_INTERVAL
+            send_raw(MP_Packet.new(MP_PacketType::HEARTBEAT, { "ts" => now.to_i }))
+            @last_heartbeat_sent = now
+            mp_log("NET: heartbeat sent ts=#{now.to_i}") if MP_ClientConfig::DEBUG_PACKETS && defined?(mp_log)
+          end
+          # Detect dead connection if no heartbeat received in timeout
+          if now - @last_heartbeat_rcvd > MP_ClientConfig::HEARTBEAT_TIMEOUT
+            mp_log("NET: heartbeat timeout — connection dead") if defined?(mp_log)
+            on_disconnected("Heartbeat timeout")
+          end
+        end
+      rescue => e
+        mp_log("NET: heartbeat_loop error #{e.class}: #{e.message}") if defined?(mp_log)
+      end
+      sleep 1.0
+    end
+    mp_log("NET: heartbeat thread exiting") if defined?(mp_log)
+  end
+
   def net_loop
+    mp_log("NET: net_loop thread started") if defined?(mp_log)
     while @running
       begin
         case @state
@@ -166,7 +181,7 @@ module MP_NetworkManager
           end
         when STATE_HANDSHAKING, STATE_CONNECTED
           receive_data
-          sleep(0.001)   # yield; outbound is handled by game-loop tick
+          sleep(0.001)
         when STATE_CONNECTING
           sleep(0.01)
         end
@@ -175,6 +190,7 @@ module MP_NetworkManager
         sleep(1)
       end
     end
+    mp_log("NET: net_loop thread exiting") if defined?(mp_log)
   end
 
   # ── Connect / handshake ────────────────────────────────────────────────────
@@ -189,7 +205,6 @@ module MP_NetworkManager
 
     @reconnect_attempts += 1
     @state = STATE_CONNECTING
-    # FIX: clear stale buffers so old connection data doesn't corrupt new one
     @receive_buffer = "".b
     @send_queue.clear
     @event_queue.clear
@@ -199,7 +214,6 @@ module MP_NetworkManager
       @socket = TCPSocket.new(MP_ClientConfig::SERVER_IP, MP_ClientConfig::SERVER_PORT)
       @socket.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1)
 
-      # Wait for $Trainer (loaded save / new game may not have it immediately)
       deadline = Time.now + 10
       sleep(0.1) until $Trainer || Time.now > deadline
 
@@ -262,7 +276,6 @@ module MP_NetworkManager
     return unless @socket && !@socket.closed?
     begin
       chunk = @socket.read_nonblock(65536)
-      # FIX: socket returns ASCII-8BIT; << on a .b buffer keeps encoding consistent
       @receive_buffer << chunk.b
       process_buffer
     rescue IO::WaitReadable
@@ -281,7 +294,6 @@ module MP_NetworkManager
         total_size = MP_Packet::HEADER_SIZE + length
         break if @receive_buffer.bytesize < total_size
 
-        # FIX: sanity-check length to detect buffer desync
         if length > 100_000
           mp_log("NET: packet length #{length} looks bogus, dropping 1 byte to resync") if defined?(mp_log)
           @receive_buffer = @receive_buffer.byteslice(1, @receive_buffer.bytesize - 1) || "".b
@@ -289,7 +301,6 @@ module MP_NetworkManager
         end
 
         raw    = @receive_buffer[0, total_size]
-        # FIX: use slice assignment to preserve binary encoding on buffer
         @receive_buffer = @receive_buffer.byteslice(total_size, @receive_buffer.bytesize - total_size) || "".b
 
         packet = MP_Packet.decode(raw)
@@ -299,13 +310,13 @@ module MP_NetworkManager
           mp_log("IN  #{packet.type_name}") if defined?(mp_log)
         end
 
-        # Handle handshake/error on this thread immediately (no game-state changes needed)
         case packet.type
         when MP_PacketType::HANDSHAKE_ACK
           @client_id         = packet.payload["client_id"]
           @state             = STATE_CONNECTED
           @reconnect_attempts= 0
           @reconnect_delay   = MP_ClientConfig::RECONNECT_BASE_INTERVAL
+          @last_heartbeat_rcvd = Time.now.to_f
           mp_log("NET: HANDSHAKE_ACK, client_id=#{@client_id}") if defined?(mp_log)
           push_event(:connect, packet.payload)
 
@@ -313,7 +324,6 @@ module MP_NetworkManager
           msg = packet.payload["message"] || "Unknown server error"
           mp_log("NET: ERROR from server: #{msg}") if defined?(mp_log)
           push_event(:error, msg)
-          # Fatal errors — stop reconnecting
           if msg.include?("Version mismatch") || msg.include?("Invalid player name") ||
              msg.include?("already logged in")
             @running = false
@@ -321,16 +331,15 @@ module MP_NetworkManager
           end
 
         when MP_PacketType::HEARTBEAT
-          # Echo back ts for RTT. Don't queue — handle immediately.
+          @last_heartbeat_rcvd = Time.now.to_f
+          # Echo back ts for RTT
           send_raw(MP_Packet.new(MP_PacketType::HEARTBEAT, { "ts" => packet.payload["ts"] }))
 
         else
-          # All other packets are deferred to the game loop thread
           push_event(:packet, packet)
         end
       rescue => e
         mp_log("NET: process_buffer error #{e.class}: #{e.message}") if defined?(mp_log)
-        # Drop one byte to try to resync stream
         @receive_buffer = @receive_buffer.byteslice(1, @receive_buffer.bytesize - 1) || "".b
       end
     end
@@ -338,7 +347,6 @@ module MP_NetworkManager
 
   # ── Send ──────────────────────────────────────────────────────────────────
 
-  # Drain the outbound queue. Called from main-thread tick().
   def process_outgoing
     return unless @socket && !@socket.closed?
     to_send = @mutex.synchronize { @send_queue.shift([@send_queue.length, 50].min) }
@@ -350,13 +358,11 @@ module MP_NetworkManager
     end
   end
 
-  # Write directly to socket (called from net_thread for handshake/heartbeat,
-  # and from process_outgoing on main thread).
   def send_raw(packet)
     return unless @socket && !@socket.closed?
     begin
-      data = packet.encode  # returns ASCII-8BIT .b string
-      @socket.write(data)   # use blocking write; non-blocking was causing silent data loss
+      data = packet.encode
+      @socket.write(data)
     rescue => e
       on_disconnected("Send error: #{e.class}: #{e.message}")
     end
@@ -372,23 +378,17 @@ module MP_NetworkManager
     @mutex.synchronize { @event_queue << [:error, msg] }
   end
 
-  # Dispatches all pending events to registered handlers.
-  # Always called from the main (game loop) thread.
   def dispatch_events
     events = @mutex.synchronize { @event_queue.shift(@event_queue.length) }
     events.each do |kind, data|
       case kind
       when :connect
         @connect_handlers.each { |cb| cb.call(data) rescue nil }
-        # After connection confirmed, send initial position + party
         initial_player_data
-
       when :disconnect
         @disconnect_handlers.each { |cb| cb.call(data) rescue nil }
-
       when :error
         @error_handlers.each { |cb| cb.call(data) rescue nil }
-
       when :packet
         handlers = @packet_handlers[data.type] || []
         handlers.each { |cb| cb.call(data.payload) rescue nil }
