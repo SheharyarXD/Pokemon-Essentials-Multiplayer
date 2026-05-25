@@ -1,0 +1,3 @@
+Name = Essentials team importer/exporter + CPU opponents
+Version = 19.1.0
+Credits = AceOfSpadesProduc100, Cilerba and Marin (original Showdown exporter for Essentials), with the help of Vendily, and Nuri Yuri 

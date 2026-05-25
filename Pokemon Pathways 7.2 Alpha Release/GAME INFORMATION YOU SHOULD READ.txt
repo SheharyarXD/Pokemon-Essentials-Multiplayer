@@ -1,0 +1,20 @@
+
+- The Phone System is unfinished. Calling anyone beside Akiza, Hyun and Yariette will result in either Akiza or Yariette's interface appearing.
+
+- Pokemon Pathways is a PC game. You can try emulating it on JoiPlay, but expect gamebreaking glitches. You are advised to play it on PC to get the true Pathways experience.
+
+- DO NOT soft reset by pressing F12. It will corrupt your data and create glitches left and right. If you accidently press it, DO NOT save, just close the game. If you want to reset, close the game manually and open it again. Caution advised.
+
+- If you encounter a problem with the PARTNER SYSTEM, like for example having a character always team up with you after you blacked out in a double battle, you can go talk to the TORCHIC DOLL in your room. Saying "no" to it will automatically separate you from your partner regardless of any glitch.
+
+- You can speed up the game by pressing F7.
+
+- Time-based evolutions depend solely on your computer's clock. The time of the day in-game is irrelevant.
+
+- There is a tutorial for Pokemon transfer in the Saved Teams folder.
+
+- Only a handful of Gen 9 Pokemons, mostly Paradox ones, got into the game.
+
+- Several changes were made to the game mechanics over the course of updates, and most (if not all of them) were noted in a Google Document accesible here: https://docs.google.com/document/d/1y8GN6eKK8h8xayIUi6ZyfZo48-1MhG7ov_CeNSWldqA/edit?usp=sharing
+
+- If you find a bug or glitch you would like to report, you can do it on the game's official Discord linked below. There are also a few guides (with spoilers, of course) available there. However, you are encouraged to read the Known Bugs list also available on the Discord to ensure it has not been reported yet: https://discord.gg/aj2tQMnQpB

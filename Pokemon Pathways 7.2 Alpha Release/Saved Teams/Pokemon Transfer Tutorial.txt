@@ -1,0 +1,10 @@
+
+
+
+
+
+
+
+- Once you reach S-rank, you are able to transfer Pokemons between different save files. This is possible by interacting with the PC in your dorm room and selecting the "Transfer" option. Then, you need to "Export" your team, which will automatically create a copy of the Pokemons present in your team when you click the option. In the process, you will be asked to name the team you want to export. Once all of this is done, a file named after the team you exported will appear here. You can then choose the option "Import" on another S-rank save file to get a copy of the team. You need to give the exact name of the team in order for the transfer to work; so, be careful of the spelling.
+
+*** Important: Pokemon transfer does not support illegal abilities. In other words, if you give your Pokemon a unique ability through Class/Role Instructors, do not expect the ability in question to carry over.

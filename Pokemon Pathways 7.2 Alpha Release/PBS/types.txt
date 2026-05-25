@@ -1,0 +1,142 @@
+# See the documentation on the wiki to learn how to edit this file.
+#-------------------------------
+[0]
+Name = Normal
+InternalName = NORMAL
+Weaknesses = FIGHTING,QMARKS, SHADOW
+Immunities = GHOST
+#-------------------------------
+[1]
+Name = Fighting
+InternalName = FIGHTING
+Weaknesses = FLYING,PSYCHIC,FAIRY,QMARKS, SHADOW
+Resistances = ROCK,BUG,DARK
+#-------------------------------
+[2]
+Name = Flying
+InternalName = FLYING
+Weaknesses = ROCK,ELECTRIC,ICE,QMARKS, SHADOW
+Resistances = FIGHTING,BUG,GRASS
+Immunities = GROUND
+#-------------------------------
+[3]
+Name = Poison
+InternalName = POISON
+Weaknesses = GROUND,PSYCHIC,QMARKS, SHADOW
+Resistances = FIGHTING,POISON,BUG,GRASS,FAIRY
+#-------------------------------
+[4]
+Name = Ground
+InternalName = GROUND
+Weaknesses = WATER,GRASS,ICE,QMARKS, SHADOW
+Resistances = POISON,ROCK
+Immunities = ELECTRIC
+#-------------------------------
+[5]
+Name = Rock
+InternalName = ROCK
+Weaknesses = FIGHTING,GROUND,STEEL,WATER,GRASS,QMARKS, SHADOW
+Resistances = NORMAL,FLYING,POISON,FIRE
+#-------------------------------
+[6]
+Name = Bug
+InternalName = BUG
+Weaknesses = FLYING,ROCK,FIRE,QMARKS, SHADOW
+Resistances = FIGHTING,GROUND,GRASS
+#-------------------------------
+[7]
+Name = Ghost
+InternalName = GHOST
+Weaknesses = GHOST,DARK,QMARKS, SHADOW
+Resistances = POISON,BUG
+Immunities = NORMAL,FIGHTING
+#-------------------------------
+[8]
+Name = Steel
+InternalName = STEEL
+Weaknesses = FIGHTING,GROUND,FIRE,QMARKS, SHADOW
+Resistances = NORMAL,FLYING,ROCK,BUG,STEEL,GRASS,PSYCHIC,ICE,DRAGON,FAIRY
+Immunities = POISON
+#-------------------------------
+[9]
+Name = ???
+InternalName = QMARKS, SHADOW
+IsPseudoType = true
+#-------------------------------
+[10]
+Name = Fire
+InternalName = FIRE
+IsSpecialType = true
+Weaknesses = GROUND,ROCK,WATER,QMARKS, SHADOW
+Resistances = BUG,STEEL,FIRE,GRASS,ICE,FAIRY
+#-------------------------------
+[11]
+Name = Water
+InternalName = WATER
+IsSpecialType = true
+Weaknesses = GRASS,ELECTRIC,QMARKS, SHADOW
+Resistances = STEEL,FIRE,WATER,ICE
+#-------------------------------
+[12]
+Name = Grass
+InternalName = GRASS
+IsSpecialType = true
+Weaknesses = FLYING,POISON,BUG,FIRE,ICE,QMARKS, SHADOW
+Resistances = GROUND,WATER,GRASS,ELECTRIC
+#-------------------------------
+[13]
+Name = Electric
+InternalName = ELECTRIC
+IsSpecialType = true
+Weaknesses = GROUND,QMARKS, SHADOW
+Resistances = FLYING,STEEL,ELECTRIC
+#-------------------------------
+[14]
+Name = Psychic
+InternalName = PSYCHIC
+IsSpecialType = true
+Weaknesses = BUG,GHOST,DARK,QMARKS, SHADOW
+Resistances = FIGHTING,PSYCHIC
+#-------------------------------
+[15]
+Name = Ice
+InternalName = ICE
+IsSpecialType = true
+Weaknesses = FIGHTING,ROCK,STEEL,FIRE,QMARKS, SHADOW
+Resistances = ICE,WATER,ELECTRIC
+#-------------------------------
+[16]
+Name = Dragon
+InternalName = DRAGON
+IsSpecialType = true
+Weaknesses = ICE,DRAGON,FAIRY,QMARKS, SHADOW
+Resistances = FIRE,WATER,GRASS,ELECTRIC
+#-------------------------------
+[17]
+Name = Dark
+InternalName = DARK
+IsSpecialType = true
+Weaknesses = FIGHTING,BUG,FAIRY,QMARKS, SHADOW
+Resistances = GHOST,DARK
+Immunities = PSYCHIC
+#-------------------------------
+[18]
+Name = Fairy
+InternalName = FAIRY
+IsSpecialType = true
+Weaknesses = POISON,STEEL,QMARKS, SHADOW
+Resistances = FIGHTING,BUG,DARK
+Immunities = DRAGON
+#-------------------------------
+[19]
+Name = Omnitype
+InternalName = OMNITYPE
+Weaknesses = ROCK
+Resistances = BUG, STEEL, DARK, GRASS, SHADOW
+Immunities = NORMAL, FIGHTING, POISON, GROUND, GHOST, ELECTRIC,PSYCHIC, DRAGON
+#-------------------------------
+[20]
+Name = Shadow
+InternalName = SHADOW
+IsSpecialType = true
+Resistances = SHADOW

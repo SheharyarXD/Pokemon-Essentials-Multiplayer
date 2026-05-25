@@ -1,0 +1,5 @@
+=== MP Debug Log 2026-05-19 07:41:44 +0500 ===
+[07:41:44.614] DIAG: Multiplayer plugin loaded
+[07:41:44.615] DIAG: Ruby version      = 3.0.0
+[07:41:44.615] DIAG: TCPSocket defined = NO
+[07:41:44.616] DIAG: Diagnostic module loaded — Scene_Map hooks delegated to 008_mp_hooks.rb

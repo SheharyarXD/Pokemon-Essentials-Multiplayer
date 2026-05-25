@@ -1,0 +1,3 @@
+Name         = Multiplayer
+Version      = 2.0.0
+Credits      = Pokemon Pathways Dev Team
