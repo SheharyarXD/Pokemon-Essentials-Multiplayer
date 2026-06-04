@@ -1,5 +1,6 @@
 #===============================================================================
 #  Pokemon Pathways Multiplayer Client - Packet System
+<<<<<<< HEAD
 #  REMOTE SKIN SYNC v3.1a — MKXP-Z Debug Mode Fix: removed require "json"
 #
 #  MKXP-Z and RPG Maker XP already have JSON available natively.
@@ -8,6 +9,27 @@
 
 # REMOVED: require 'json' — MKXP-Z has JSON built-in
 
+=======
+#
+#  Wire format (must match server exactly):
+#    [type      : uint16 BE] 2 bytes
+#    [length    : uint16 BE] 2 bytes  (byte length of JSON payload)
+#    [timestamp : uint32 BE] 4 bytes  (Unix seconds - NOT milliseconds)
+#    [payload   : UTF-8 JSON] N bytes
+#
+#  FIXES vs original:
+#   * TIMESTAMP: was (Time.now.to_f * 1000).to_i (milliseconds) → overflows
+#     uint32 after ~49 days from epoch. Fixed server uses seconds. Changed
+#     to Time.now.to_i to match.
+#   * ENCODING: encode now calls .b on output to produce a single binary
+#     (ASCII-8BIT) string. pack('n'/'N') returns ASCII-8BIT; JSON string is
+#     UTF-8; joining them without a forced encoding causes a Encoding error
+#     when the socket tries to write it, or when the buffer concatenates it.
+#   * DECODE: forced raw to .b before slicing so byte operations work even
+#     when the data argument has UTF-8 encoding.
+#===============================================================================
+
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
 module MP_PacketType
   # Connection (0-9)
   HANDSHAKE       = 0
@@ -80,6 +102,7 @@ class MP_Packet
 
   def initialize(type, payload = {})
     @type      = type
+<<<<<<< HEAD
     @timestamp = Time.now.to_i
     @payload   = payload
   end
@@ -87,6 +110,17 @@ class MP_Packet
   def self.decode(data)
     return nil if data.nil? || data.bytesize < HEADER_SIZE
 
+=======
+    @timestamp = Time.now.to_i   # FIX: seconds not milliseconds; avoids uint32 overflow
+    @payload   = payload
+  end
+
+  # Decode a binary string into a packet. Returns nil on any error.
+  def self.decode(data)
+    return nil if data.nil? || data.bytesize < HEADER_SIZE
+
+    # FIX: force binary so all slice/unpack calls operate on raw bytes
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
     raw = data.b
 
     type      = raw[0, 2].unpack1("n")
@@ -106,6 +140,7 @@ class MP_Packet
     nil
   end
 
+<<<<<<< HEAD
   def encode
     payload_json = @payload.to_json
     length = payload_json.bytesize
@@ -115,6 +150,14 @@ class MP_Packet
       length = payload_json.bytesize
     end
 
+=======
+  # Encode packet to wire format. Always returns a binary (ASCII-8BIT) string.
+  def encode
+    payload_json = @payload.to_json
+    length = payload_json.bytesize
+    # FIX: .b forces all parts to ASCII-8BIT before concatenation, preventing
+    # Encoding::CompatibilityError when writing to the socket.
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
     [
       [@type, length].pack("nn"),
       [@timestamp].pack("N"),

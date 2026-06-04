@@ -1,5 +1,6 @@
 #===============================================================================
 #  Pokemon Pathways Multiplayer Client - Remote Player Character
+<<<<<<< HEAD
 #  REMOTE SKIN SYNC v3.1 — MKXP-Z compatibility: expose ALL methods
 #  Sprite_Character expects, including step_anime READER.
 #
@@ -7,12 +8,20 @@
 #  instance variable but may NOT expose a reader method. Sprite_Character
 #  calls character.step_anime directly. We must add explicit readers
 #  for every field Sprite_Character touches.
+=======
+#  STABILIZED v2.1 — Safe sprite creation, placeholder bitmap fallback
+#
+#  Subclass of Game_Character that the existing Spriteset_Map can render.
+#  Reads position from RemotePlayerData and applies smoothed interpolation.
+#  All Sprite/Bitmap creation happens on main thread via create_name_sprite.
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
 #===============================================================================
 
 class MP_Game_RemotePlayer < Game_Character
   attr_reader   :mp_id, :mp_name, :data
   attr_accessor :mp_sprite
 
+<<<<<<< HEAD
   # Sprite_Character compatibility shims — MKXP-Z may check these directly
   def name; @mp_name; end
   def id; 0; end
@@ -37,6 +46,8 @@ class MP_Game_RemotePlayer < Game_Character
   def anime_count; @anime_count; end
   def blend_type; @blend_type; end
 
+=======
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def initialize(data)
     super()
     @data    = data
@@ -49,6 +60,7 @@ class MP_Game_RemotePlayer < Game_Character
     @transparent    = false
     @opacity        = 255
     @move_speed     = 4
+<<<<<<< HEAD
     @pattern        = 0
     @original_pattern = 0
     @original_direction = data.direction
@@ -58,21 +70,37 @@ class MP_Game_RemotePlayer < Game_Character
     @move_frequency = 6
     @anime_count    = 0
     @blend_type     = 0
+=======
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
 
     @x          = data.x
     @y          = data.y
     @real_x     = data.real_x.to_i
     @real_y     = data.real_y.to_i
     @direction  = data.direction
+<<<<<<< HEAD
 
     @character_name = data.sprite_name.to_s
     @character_hue  = data.character_hue.to_i
     set_character_graphic(data.sprite_name, data.character_hue)
+=======
+    @original_direction = data.direction
+
+    set_character_graphic(data.sprite_name)
+
+    @pattern      ||= 0
+    @original_direction ||= @direction
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
 
     @name_sprite    = nil
     @name_viewport  = nil
   end
 
+<<<<<<< HEAD
+=======
+  # ─── Frame update ──────────────────────────────────────────────────────────
+
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def update
     @data.update_interpolation if MP_ClientConfig::INTERPOLATION_ENABLED
 
@@ -90,22 +118,39 @@ class MP_Game_RemotePlayer < Game_Character
     super
   end
 
+<<<<<<< HEAD
   def set_character_graphic(name, hue = 0)
     n = name.to_s.strip
     h = hue.to_i
 
     mp_log("SPRITE: set_character_graphic called '#{n}' (hue:#{h}) for #{@mp_name}") if defined?(mp_log)
 
+=======
+  # ─── Appearance setters ────────────────────────────────────────────────────
+
+  def set_character_graphic(name)
+    return if name.nil?
+    n = name.to_s.strip
+
+    # Server sends sprite index as "0", "1", "2" etc. — these are NOT valid charset names.
+    # Map them to proper trainer overworld sprites.
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
     if n.empty? || n =~ /^\d+$/
       n = resolve_trainer_charset
     end
 
+<<<<<<< HEAD
     if n.empty?
       mp_log("SPRITE: fallback placeholder used for #{@mp_name} (no valid charset)") if defined?(mp_log)
+=======
+    # If still invalid, use the user's specified default
+    if n.empty? || n =~ /^\d+$/
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
       n = "trainer_POKEMONTRAINER_Red"
     end
 
     @character_name = n
+<<<<<<< HEAD
     @character_hue  = h
     @data.sprite_name = n if @data
     @data.character_hue = h if @data
@@ -159,6 +204,36 @@ class MP_Game_RemotePlayer < Game_Character
   def safe_character_name; @character_name.to_s; end
   def safe_character_hue; @character_hue.to_i; end
 
+=======
+    @character_hue  = 0
+    mp_log("SPRITE: set character graphic to '#{@character_name}' for #{@mp_name}") if defined?(mp_log)
+  end
+
+  # Resolve trainer charset from server sprite index or local player data.
+  # Server sends outfit index (0,1,2...) which maps to different trainer sprites.
+  def resolve_trainer_charset
+    # Try to use the local player's charset as a reference
+    if $game_player && $game_player.character_name && !$game_player.character_name.empty?
+      return $game_player.character_name
+    end
+
+    # Default trainer overworld sprites based on outfit index
+    outfit = @data.outfit.to_i
+    case outfit
+    when 0
+      "trainer_POKEMONTRAINER_Red"
+    when 1
+      "trainer_POKEMONTRAINER_Leaf"
+    when 2
+      "trainer_POKEMONTRAINER_Brendan"
+    when 3
+      "trainer_POKEMONTRAINER_May"
+    else
+      "trainer_POKEMONTRAINER_Red"
+    end
+  end
+
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def set_direction(dir)
     @direction = dir.to_i
     @original_direction = @direction
@@ -166,6 +241,11 @@ class MP_Game_RemotePlayer < Game_Character
     @data.direction = @direction
   end
 
+<<<<<<< HEAD
+=======
+  # ─── Name sprite ───────────────────────────────────────────────────────────
+
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def create_name_sprite(viewport = nil)
     dispose_name_sprite
     return unless @mp_name
@@ -235,6 +315,11 @@ class MP_Game_RemotePlayer < Game_Character
     create_name_sprite(vp)
   end
 
+<<<<<<< HEAD
+=======
+  # ─── Cleanup ───────────────────────────────────────────────────────────────
+
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def dispose
     dispose_name_sprite
   end

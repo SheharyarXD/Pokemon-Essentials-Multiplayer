@@ -1,27 +1,50 @@
 #===============================================================================
 #  Pokemon Pathways Multiplayer Client - Overworld Sync Manager
+<<<<<<< HEAD
 #  REMOTE SKIN SYNC v3.1 — Sprite_Character cache invalidation fix,
 #  live sprite change detection, full hue/trainer_type propagation.
+=======
+#  STABILIZED v2.1 — Dynamic viewport, map-loading lock, safe sprite lifecycle
+#
+#  CRITICAL FIX for Pokemon Essentials v19.1:
+#    In PE v19.1, Scene_Map does NOT create @spriteset in main() like standard RMXP.
+#    The spriteset is created in update() or managed differently. Our code must
+#    create its own viewport and manage sprite lifecycle independently.
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
 #===============================================================================
 
 module MP_OverworldManager
 
+<<<<<<< HEAD
   @remote_players  = {}
   @remote_sprites  = {}
+=======
+  @remote_players  = {}   # mp_id => MP_Game_RemotePlayer
+  @remote_sprites  = {}   # mp_id => Sprite_MP_RemotePlayer
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
 
   @last_x          = nil
   @last_y          = nil
   @last_dir        = nil
   @last_map        = nil
+<<<<<<< HEAD
   @last_local_sprite = nil
   @last_local_hue    = nil
   @last_local_outfit = nil
+=======
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   @frame_count     = 0
   @initialized     = false
 
   @last_no_vp_log  = 0
   @sprite_retry_at = {}
+<<<<<<< HEAD
   @fallback_viewport = nil
+=======
+  @fallback_viewport = nil   # Self-managed viewport when spriteset unavailable
+
+  # ── Lifecycle ───────────────────────────────────────────────────────────────
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
 
   def init
     return if @initialized
@@ -29,9 +52,12 @@ module MP_OverworldManager
     @sprite_retry_at = {}
     @remote_players  = {}
     @remote_sprites  = {}
+<<<<<<< HEAD
     @last_local_sprite = nil
     @last_local_hue    = nil
     @last_local_outfit = nil
+=======
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
     register_packet_handlers
     mp_log("OW: initialized") if defined?(mp_log)
   end
@@ -69,10 +95,18 @@ module MP_OverworldManager
     update_local_position
     update_remote_players
     update_culling
+<<<<<<< HEAD
     update_remote_sprites
   end
 
   def set_viewport(vp)
+=======
+    update_remote_sprites   # NEW: manually update sprites since they may not be in scene
+  end
+
+  def set_viewport(vp)
+    # No-op: viewport is fetched dynamically via current_viewport
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   end
 
   def on_map_changed
@@ -80,9 +114,12 @@ module MP_OverworldManager
     clear_map_sprites
     @remote_players.clear
     @last_x = @last_y = @last_dir = @last_map = nil
+<<<<<<< HEAD
     @last_local_sprite = nil
     @last_local_hue = nil
     @last_local_outfit = nil
+=======
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
     @sprite_retry_at.clear
   end
 
@@ -91,12 +128,20 @@ module MP_OverworldManager
     clear_map_sprites
     @remote_players.clear
     @last_x = @last_y = @last_dir = @last_map = nil
+<<<<<<< HEAD
     @last_local_sprite = nil
     @last_local_hue = nil
     @last_local_outfit = nil
     @sprite_retry_at.clear
   end
 
+=======
+    @sprite_retry_at.clear
+  end
+
+  # ── Packet handlers ─────────────────────────────────────────────────────────
+
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def register_packet_handlers
     MP_NetworkManager.on_packet(MP_PacketType::PLAYER_JOIN)     { |p| handle_player_join(p)     }
     MP_NetworkManager.on_packet(MP_PacketType::PLAYER_LEAVE)    { |p| handle_player_leave(p)    }
@@ -111,6 +156,11 @@ module MP_OverworldManager
     MP_NetworkManager.on_connect    { on_map_changed }
   end
 
+<<<<<<< HEAD
+=======
+  # ── Local player movement ────────────────────────────────────────────────────
+
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def update_local_position
     return unless $game_player && $game_map
     x   = $game_player.x
@@ -131,6 +181,7 @@ module MP_OverworldManager
     if @frame_count % 300 == 0
       MP_NetworkManager.send_party_data
     end
+<<<<<<< HEAD
     check_local_sprite_change
   end
 
@@ -157,6 +208,11 @@ module MP_OverworldManager
       })
     end
   end
+=======
+  end
+
+  # ── Remote player update loop ────────────────────────────────────────────────
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
 
   def update_remote_players
     @remote_players.each do |mp_id, rp|
@@ -187,6 +243,10 @@ module MP_OverworldManager
     end
   end
 
+<<<<<<< HEAD
+=======
+  # NEW: Manually update all remote sprites since they may not be in scene's sprite list
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def update_remote_sprites
     @remote_sprites.each_value do |sprite|
       begin
@@ -215,6 +275,11 @@ module MP_OverworldManager
     end
   end
 
+<<<<<<< HEAD
+=======
+  # ── Incoming packet handlers ─────────────────────────────────────────────────
+
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def handle_player_join(payload)
     mp_id = payload["client_id"]
     return unless mp_id
@@ -225,17 +290,25 @@ module MP_OverworldManager
       mp_id, payload["name"] || "???", map_id,
       payload["x"] || 0, payload["y"] || 0,
       payload["direction"] || 2,
+<<<<<<< HEAD
       payload["sprite"] || "",
       payload["outfit"] || 0,
       payload["character_hue"] || 0,
       payload["trainer_type"] || ""
+=======
+      payload["sprite"] || "", payload["outfit"] || 0
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
     )
     data.party_display = payload["party_display"]
     rp = MP_Game_RemotePlayer.new(data)
     @remote_players[mp_id] = rp
     @sprite_retry_at[mp_id] = 0
     create_sprite_for(rp)
+<<<<<<< HEAD
     mp_log("OW: #{data.name} joined map #{map_id} (#{data.x},#{data.y}) sprite='#{data.sprite_name}' hue=#{data.character_hue}") if defined?(mp_log)
+=======
+    mp_log("OW: #{data.name} joined map #{map_id} (#{data.x},#{data.y}) sprite='#{data.sprite_name}'") if defined?(mp_log)
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   end
 
   def handle_player_leave(payload)
@@ -275,6 +348,7 @@ module MP_OverworldManager
     mp_id = payload["client_id"]
     rp = @remote_players[mp_id]
     return unless rp && payload["sprite"]
+<<<<<<< HEAD
 
     old_sprite = rp.character_name
     rp.set_character_graphic(payload["sprite"], payload["character_hue"].to_i)
@@ -302,6 +376,12 @@ module MP_OverworldManager
 
     rp.refresh_name_sprite(current_viewport)
     mp_log("SPRITE: live charset update for #{rp.mp_name} -> '#{payload['sprite']}'") if defined?(mp_log)
+=======
+    rp.data.sprite_name = payload["sprite"]
+    rp.data.outfit = payload["outfit"].to_i
+    rp.set_character_graphic(payload["sprite"])
+    rp.refresh_name_sprite(current_viewport)
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   end
 
   def handle_player_data(payload)
@@ -314,6 +394,11 @@ module MP_OverworldManager
 
   def handle_player_action(payload); end
 
+<<<<<<< HEAD
+=======
+  # ── Sprite management (main thread only) ────────────────────────────────────
+
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def create_sprite_for(rp)
     if $mp_map_loading
       mp_log("OW: create_sprite_for #{rp.mp_name} — BLOCKED by $mp_map_loading") if MP_ClientConfig::DEBUG_SPRITES && defined?(mp_log)
@@ -347,6 +432,10 @@ module MP_OverworldManager
       sprite = Sprite_MP_RemotePlayer.new(vp, rp)
       @remote_sprites[rp.mp_id] = sprite
 
+<<<<<<< HEAD
+=======
+      # Try to add to scene's character sprites for lifecycle management
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
       spriteset = current_spriteset
       if spriteset
         arr = spriteset.instance_variable_get(:@character_sprites)
@@ -380,13 +469,22 @@ module MP_OverworldManager
     @sprite_retry_at.delete(mp_id)
   end
 
+<<<<<<< HEAD
+=======
+  # ── Fallback viewport management ────────────────────────────────────────────
+
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def ensure_fallback_viewport
     begin
       if @fallback_viewport && !@fallback_viewport.disposed?
         return @fallback_viewport
       end
       @fallback_viewport = Viewport.new(0, 0, Graphics.width, Graphics.height)
+<<<<<<< HEAD
       @fallback_viewport.z = 100
+=======
+      @fallback_viewport.z = 100   # Above map but below UI
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
       mp_log("OW: created fallback viewport #{Graphics.width}x#{Graphics.height}") if MP_ClientConfig::DEBUG_SPRITES && defined?(mp_log)
       @fallback_viewport
     rescue => e
@@ -407,6 +505,11 @@ module MP_OverworldManager
     @fallback_viewport = nil
   end
 
+<<<<<<< HEAD
+=======
+  # ── Helpers ─────────────────────────────────────────────────────────────────
+
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def remote_player_count; @remote_players.length; end
 
   private
@@ -415,11 +518,19 @@ module MP_OverworldManager
     $scene.is_a?(Scene_Map)
   end
 
+<<<<<<< HEAD
+=======
+  # DYNAMIC viewport getter — tries spriteset first, then fallback
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def current_viewport
     return nil unless in_scene_map?
     scene_map = $scene
     return nil unless scene_map.is_a?(Scene_Map)
 
+<<<<<<< HEAD
+=======
+    # Try to get viewport from existing spriteset
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
     spriteset = nil
     [:@spriteset, :@map_sprites, :@sprites, :@viewport_sprites].each do |name|
       begin
@@ -442,6 +553,10 @@ module MP_OverworldManager
       end
     end
 
+<<<<<<< HEAD
+=======
+    # No spriteset viewport — return fallback if available
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
     if @fallback_viewport && !@fallback_viewport.disposed?
       return @fallback_viewport
     end

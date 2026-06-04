@@ -5,7 +5,11 @@
 #===============================================================================
 
 class VersionCheck
+<<<<<<< HEAD
   REQUIRED_VERSION = "9.1.3"
+=======
+  REQUIRED_VERSION = "7.4.2"
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
 
   def valid?(client_version)
     return false if client_version.nil? || client_version.to_s.strip.empty?

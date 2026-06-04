@@ -1,10 +1,20 @@
 #===============================================================================
 #  Pokemon Pathways Multiplayer Client - Network Manager
+<<<<<<< HEAD
 #  REMOTE SKIN SYNC v3.1a — MKXP-Z Debug Mode Fix: removed require "json"
 #
 #  MKXP-Z and RPG Maker XP already have JSON available natively.
 #  Calling require "json" in debug mode (PluginManager eval context)
 #  causes LoadError because the gem path isn't in $LOAD_PATH.
+=======
+#  STABILIZED v2.1 — Dedicated heartbeat thread, session singleton bootstrap
+#
+#  Architecture:
+#    * Background net_thread handles TCP read + handshake + heartbeat echo
+#    * Dedicated heartbeat_thread sends outbound heartbeats every 5s
+#    * Main-thread tick() drains outbound queue + dispatches inbound events
+#    * All graphics/UI code runs on main thread via event_queue
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
 #===============================================================================
 
 begin
@@ -12,7 +22,11 @@ begin
 rescue LoadError => e
   raise e unless defined?(TCPSocket) && defined?(Socket)
 end
+<<<<<<< HEAD
 # REMOVED: require "json" — MKXP-Z has JSON built-in, require crashes debug mode
+=======
+require "json"
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
 
 module MP_NetworkManager
 
@@ -45,6 +59,11 @@ module MP_NetworkManager
   @last_heartbeat_sent  = 0
   @last_heartbeat_rcvd  = 0
 
+<<<<<<< HEAD
+=======
+  # ── Public state ────────────────────────────────────────────────────────────
+
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def connected?;  @state == STATE_CONNECTED;  end
   def connecting?; @state == STATE_CONNECTING || @state == STATE_HANDSHAKING; end
   def client_id;   @client_id;   end
@@ -54,6 +73,11 @@ module MP_NetworkManager
     %w[DISCONNECTED CONNECTING HANDSHAKING CONNECTED][@state] || "UNKNOWN"
   end
 
+<<<<<<< HEAD
+=======
+  # ── Lifecycle ───────────────────────────────────────────────────────────────
+
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def start
     return if @running
     @running             = true
@@ -84,11 +108,20 @@ module MP_NetworkManager
     mp_log("NET: stopped") if defined?(mp_log)
   end
 
+<<<<<<< HEAD
+=======
+  # ── Game-loop side (called every frame from Scene_Map#update) ─────────────
+
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def tick
     process_outgoing
     dispatch_events
   end
 
+<<<<<<< HEAD
+=======
+  # Push an outbound packet (safe to call from any thread).
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def send_packet(type, payload = {})
     return unless @state == STATE_CONNECTED
     @mutex.synchronize do
@@ -101,6 +134,11 @@ module MP_NetworkManager
     end
   end
 
+<<<<<<< HEAD
+=======
+  # ── Callback registration ─────────────────────────────────────────────────
+
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def on_packet(type, &block)
     @packet_handlers[type] ||= []
     @packet_handlers[type] << block
@@ -117,6 +155,11 @@ module MP_NetworkManager
     @error_handlers.clear
   end
 
+<<<<<<< HEAD
+=======
+  # ── Party helper ────────────────────────────────────────────────────────────
+
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def send_party_data
     return unless $Trainer&.party&.first
     first = $Trainer.party[0]
@@ -125,6 +168,7 @@ module MP_NetworkManager
     })
   end
 
+<<<<<<< HEAD
   def send_sprite_update
     return unless $game_player && MP_NetworkManager.connected?
     sprite = $game_player.character_name.to_s rescue ""
@@ -141,6 +185,9 @@ module MP_NetworkManager
       "outfit"        => outfit
     })
   end
+=======
+  # ── Private: background network thread ─────────────────────────────────────
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
 
   private
 
@@ -156,6 +203,10 @@ module MP_NetworkManager
             @last_heartbeat_sent = now
             mp_log("NET: heartbeat sent ts=#{now.to_i}") if MP_ClientConfig::DEBUG_PACKETS && defined?(mp_log)
           end
+<<<<<<< HEAD
+=======
+          # Detect dead connection if no heartbeat received in timeout
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
           if now - @last_heartbeat_rcvd > MP_ClientConfig::HEARTBEAT_TIMEOUT
             mp_log("NET: heartbeat timeout — connection dead") if defined?(mp_log)
             on_disconnected("Heartbeat timeout")
@@ -194,6 +245,11 @@ module MP_NetworkManager
     mp_log("NET: net_loop thread exiting") if defined?(mp_log)
   end
 
+<<<<<<< HEAD
+=======
+  # ── Connect / handshake ────────────────────────────────────────────────────
+
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def attempt_connect
     max = MP_ClientConfig::RECONNECT_MAX_ATTEMPTS
     if max > 0 && @reconnect_attempts >= max
@@ -247,6 +303,7 @@ module MP_NetworkManager
   def build_handshake_packet
     sprite = ""
     outfit = 0
+<<<<<<< HEAD
     hue = 0
     trainer_type = ""
 
@@ -305,6 +362,22 @@ module MP_NetworkManager
     false
   end
 
+=======
+    if $game_player&.respond_to?(:charsetData) && $game_player.charsetData
+      sprite = ($game_player.charsetData[1] || "").to_s rescue ""
+      outfit = ($game_player.charsetData[2] || 0).to_i  rescue 0
+    end
+    version = (Settings::GAME_VERSION rescue "7.4.2")
+
+    MP_Packet.new(MP_PacketType::HANDSHAKE, {
+      "name"    => $Trainer.name,
+      "version" => version,
+      "sprite"  => sprite,
+      "outfit"  => outfit
+    })
+  end
+
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def backoff_and_reset
     sleep(@reconnect_delay)
     @reconnect_delay = [@reconnect_delay * MP_ClientConfig::RECONNECT_BACKOFF_MULTIPLIER,
@@ -313,6 +386,11 @@ module MP_NetworkManager
     close_socket
   end
 
+<<<<<<< HEAD
+=======
+  # ── Receive ────────────────────────────────────────────────────────────────
+
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def receive_data
     return unless @socket && !@socket.closed?
     begin
@@ -320,6 +398,10 @@ module MP_NetworkManager
       @receive_buffer << chunk.b
       process_buffer
     rescue IO::WaitReadable
+<<<<<<< HEAD
+=======
+      # nothing to read yet
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
     rescue EOFError, Errno::ECONNRESET, Errno::EPIPE, IOError
       on_disconnected("Connection lost")
     rescue => e
@@ -372,6 +454,10 @@ module MP_NetworkManager
 
         when MP_PacketType::HEARTBEAT
           @last_heartbeat_rcvd = Time.now.to_f
+<<<<<<< HEAD
+=======
+          # Echo back ts for RTT
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
           send_raw(MP_Packet.new(MP_PacketType::HEARTBEAT, { "ts" => packet.payload["ts"] }))
 
         else
@@ -384,6 +470,11 @@ module MP_NetworkManager
     end
   end
 
+<<<<<<< HEAD
+=======
+  # ── Send ──────────────────────────────────────────────────────────────────
+
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def process_outgoing
     return unless @socket && !@socket.closed?
     to_send = @mutex.synchronize { @send_queue.shift([@send_queue.length, 50].min) }
@@ -405,6 +496,11 @@ module MP_NetworkManager
     end
   end
 
+<<<<<<< HEAD
+=======
+  # ── Event queue (net→game) ─────────────────────────────────────────────────
+
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def push_event(kind, data)
     @mutex.synchronize { @event_queue << [kind, data] }
   end
@@ -442,6 +538,11 @@ module MP_NetworkManager
     send_party_data
   end
 
+<<<<<<< HEAD
+=======
+  # ── Disconnect ────────────────────────────────────────────────────────────
+
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def on_disconnected(reason)
     return if @state == STATE_DISCONNECTED
     mp_log("NET: disconnected (#{reason})") if defined?(mp_log)

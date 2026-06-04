@@ -1,6 +1,23 @@
 #===============================================================================
 #  Pokemon Pathways Multiplayer - Client Manager
+<<<<<<< HEAD
 #  PHASE 2 v4.0 — Route new packet ranges: 37-39 (2v2), 83 (rank), 90-94 (partner)
+=======
+#
+#  Central registry of all connected MP_Client instances.
+#
+#  FIXES vs original:
+#   * DEADLOCK: clients.each held @mutex; route_packet -> find() re-acquired it.
+#     Resolved by snapshotting the client list before iterating.
+#   * DEADLOCK in disconnect_all: held @mutex while calling disconnect() which
+#     calls remove_client() -> @mutex.  Resolved by clearing first, disconnecting
+#     outside the lock.
+#   * Routing bug: TRADE_CANCEL (type 57) had duplicate 'when 57' clause after
+#     'when 50..59'; dead code removed.
+#   * Heartbeat echo now carries original client timestamp for RTT measurement.
+#   * check_timeouts no longer calls handle_disconnect separately; MP_Client#disconnect
+#     is idempotent and does all cleanup internally.
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
 #===============================================================================
 
 require_relative 'config'
@@ -11,12 +28,21 @@ class ClientManager
 
   def initialize(server)
     @server  = server
+<<<<<<< HEAD
     @clients = {}
+=======
+    @clients = {}      # id => MP_Client
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
     @mutex   = Mutex.new
   end
 
   # ─── Enumerable / lookup ─────────────────────────────────────────────────────
 
+<<<<<<< HEAD
+=======
+  # FIX: snapshot the values array before yielding so callers that trigger
+  # remove_client inside the block don't cause mutex re-entry or mutation errors.
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def each(&block)
     snapshot.each(&block)
   end
@@ -56,6 +82,11 @@ class ClientManager
     @mutex.synchronize { @clients.delete(client.id) }
   end
 
+<<<<<<< HEAD
+=======
+  # FIX: Disconnect all without holding the mutex during the disconnect calls,
+  # which prevents the deadlock (disconnect -> remove_client -> mutex).
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def disconnect_all
     all = @mutex.synchronize { @clients.values.dup.tap { @clients.clear } }
     all.each do |client|
@@ -76,6 +107,10 @@ class ClientManager
 
     when MP_PacketType::HEARTBEAT
       client.last_heartbeat = Time.now
+<<<<<<< HEAD
+=======
+      # FIX: Echo the client's own timestamp so it can measure round-trip time
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
       client.send_packet(MP_Packet.new(MP_PacketType::HEARTBEAT, {
         "ts" => packet.payload["ts"]
       }))
@@ -84,6 +119,10 @@ class ClientManager
       client.disconnect
 
     else
+<<<<<<< HEAD
+=======
+      # All other packets require authentication
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
       unless client.authenticated
         client.send_packet(MP_Packet.new(MP_PacketType::ERROR, {
           "message" => "Not authenticated"
@@ -96,6 +135,11 @@ class ClientManager
 
   # ─── Timeout sweep ───────────────────────────────────────────────────────────
 
+<<<<<<< HEAD
+=======
+  # FIX: No longer calls handle_disconnect separately; MP_Client#disconnect
+  # is idempotent and handles battle/trade/room cleanup internally.
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def check_timeouts
     snapshot.each do |client|
       next unless client.timed_out?
@@ -113,14 +157,23 @@ class ClientManager
     end
   end
 
+<<<<<<< HEAD
   private
 
+=======
+  # ─── Private ─────────────────────────────────────────────────────────────────
+
+  private
+
+  # Returns a consistent snapshot without holding the mutex during iteration.
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
   def snapshot
     @mutex.synchronize { @clients.values.dup }
   end
 
   def route_to_service(client, packet)
     case packet.type
+<<<<<<< HEAD
     when 10..18
       # Overworld: PLAYER_JOIN..PLAYER_ACTION, MAP_CHANGE, PLAYER_PARTY etc.
       @server.overworld.handle_packet(client, packet)
@@ -153,6 +206,19 @@ class ClientManager
       # Partner system  (Phase 2)
       @server.partners.handle_packet(client, packet)
 
+=======
+    when 10..18   # Overworld packets (PLAYER_JOIN..PLAYER_ACTION)
+      @server.overworld.handle_packet(client, packet)
+    when 30..36   # Battle packets
+      @server.battles.handle_packet(client, packet)
+    when 50..57   # Trade packets (TRADE_REQUEST..TRADE_CANCEL)
+      # FIX: Original had duplicate 'when 57' after 'when 50..59'; removed dead branch.
+      @server.trades.handle_packet(client, packet)
+    when 70..72   # Chat packets
+      @server.chat.handle_packet(client, packet)
+    when 80..82   # Player data
+      @server.overworld.handle_packet(client, packet)
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
     else
       puts "[ROUTE] Unknown packet type #{packet.type} from #{client.player_name || client.id[0, 8]}"
     end

@@ -1,5 +1,330 @@
+<<<<<<< HEAD
 === MP Debug Log 2026-05-19 07:41:44 +0500 ===
 [07:41:44.614] DIAG: Multiplayer plugin loaded
 [07:41:44.615] DIAG: Ruby version      = 3.0.0
 [07:41:44.615] DIAG: TCPSocket defined = NO
 [07:41:44.616] DIAG: Diagnostic module loaded — Scene_Map hooks delegated to 008_mp_hooks.rb
+=======
+=== MP Debug Log 2026-05-14 20:36:37 +0500 ===
+[20:36:37.785] DIAG: Multiplayer plugin loaded
+[20:36:37.785] DIAG: Ruby version      = 3.0.0
+[20:36:37.785] DIAG: TCPSocket defined = NO
+[20:36:37.785] DIAG: Diagnostic module loaded — Scene_Map hooks delegated to 008_mp_hooks.rb
+[20:36:37.810] HOOKS: MP v2.1 stabilized hooks installed
+[20:36:48.177] HOOK: Scene_Map#main entered
+[20:36:48.629] BOOT: multiplayer session bootstrap starting
+[20:36:48.629] NET: start — background threads launching
+[20:36:48.630] OW: initialized
+[20:36:48.631] NET: heartbeat thread started
+[20:36:48.631] NET: net_loop thread started
+[20:36:48.631] CHAT: initialized
+[20:36:48.632] NET: connecting (attempt 1)
+[20:36:48.632] BATTLE: initialized
+[20:36:48.635] TRADE: initialized
+[20:36:48.635] BOOT: multiplayer initialized ONCE for this session
+[20:36:48.805] NET: HANDSHAKE_ACK, client_id=OZ5IH714XAIL
+[20:36:48.853] OW: on_map_changed — clearing sprites, NOT disposing core
+[20:36:48.853] OW: clear_map_sprites called
+[20:36:49.840] OW: clear_map_sprites called
+[20:36:49.841] OW: map player list received (0 players)
+[20:36:51.024] HOOK: Scene_Map#main entered
+[20:36:51.904] BOOT: multiplayer session bootstrap starting
+[20:36:51.905] NET: start — background threads launching
+[20:36:51.905] OW: initialized
+[20:36:51.907] NET: heartbeat thread started
+[20:36:51.907] NET: net_loop thread started
+[20:36:51.908] CHAT: initialized
+[20:36:51.908] NET: connecting (attempt 1)
+[20:36:51.908] BATTLE: initialized
+[20:36:51.911] TRADE: initialized
+[20:36:51.911] BOOT: multiplayer initialized ONCE for this session
+[20:36:52.292] NET: HANDSHAKE_ACK, client_id=26PN4A4I8QY3
+[20:36:52.396] OW: on_map_changed — clearing sprites, NOT disposing core
+[20:36:52.396] OW: clear_map_sprites called
+[20:36:52.855] OW: clear_map_sprites called
+[20:36:52.855] OW: map player list received (0 players)
+[20:36:54.089] HOOK: transfer_player — $mp_map_loading = true
+[20:36:55.205] OW: on_map_changed — clearing sprites, NOT disposing core
+[20:36:55.205] OW: clear_map_sprites called
+[20:36:55.206] HOOK: MAP_CHANGE sent — map 2 (18,13)
+[20:36:55.370] SPRITE: set character graphic to 'trainer_POKEMONTRAINER_Red' for XD
+[20:36:55.370] OW: created fallback viewport 512x384
+[20:36:55.371] SPRITE: init error NoMethodError: undefined method `name' for #<MP_Game_RemotePlayer> — using placeholder
+[20:36:55.392] SPRITE: name sprite created for XD
+[20:36:55.392] OW: sprite created for XD
+[20:36:55.393] OW: XD joined map 2 (18,13) sprite='1'
+[20:36:55.430] OW: clear_map_sprites called
+[20:36:55.431] SPRITE: set character graphic to 'trainer_POKEMONTRAINER_Red' for aaaaaaaaaa
+[20:36:55.431] OW: create_sprite_for aaaaaaaaaa — BLOCKED by $mp_map_loading
+[20:36:55.431] OW: aaaaaaaaaa joined map 2 (20,14) sprite='1'
+[20:36:55.432] OW: map player list received (1 players)
+[20:36:56.248] HOOK: $mp_map_loading released after 60 frames
+[20:36:56.257] OW: created fallback viewport 512x384
+[20:36:56.258] SPRITE: init error NoMethodError: undefined method `name' for #<MP_Game_RemotePlayer> — using placeholder
+[20:36:56.260] SPRITE: name sprite created for aaaaaaaaaa
+[20:36:56.261] OW: sprite created for aaaaaaaaaa
+[20:39:36.815] NET: disconnected (Send error: Errno::ECONNRESET: An existing connection was forcibly closed by the remote host.)
+[20:39:36.820] NET: connecting (attempt 1)
+[20:39:36.838] NET: disconnected (Send error: Errno::EPIPE: Broken pipe)
+[20:39:36.882] OW: on_disconnect — clearing sprites, NOT disposing core
+[20:39:36.883] OW: clear_map_sprites called
+[20:39:36.883] SPRITE: name sprite disposed for aaaaaaaaaa
+[20:39:36.884] OW: disposed fallback viewport
+[20:39:36.884] BOOT: disconnected (Send error: Errno::EPIPE: Broken pipe) — clearing sprites only
+[20:39:36.884] OW: on_disconnect — clearing sprites, NOT disposing core
+[20:39:36.886] OW: clear_map_sprites called
+[20:39:36.931] NET: HANDSHAKE_ACK, client_id=ZIRT6Z3X6S4O
+[20:39:36.949] OW: on_map_changed — clearing sprites, NOT disposing core
+[20:39:36.949] OW: clear_map_sprites called
+[20:39:37.044] OW: clear_map_sprites called
+[20:39:37.045] OW: map player list received (0 players)
+[20:39:37.439] NET: HANDSHAKE_ACK, client_id=724C4Q87JT31
+[20:39:37.447] OW: on_map_changed — clearing sprites, NOT disposing core
+[20:39:37.448] OW: clear_map_sprites called
+[20:39:37.448] SPRITE: name sprite disposed for XD
+[20:39:37.448] OW: disposed fallback viewport
+[20:39:37.587] OW: clear_map_sprites called
+[20:39:37.606] SPRITE: set character graphic to 'trainer_POKEMONTRAINER_Red' for XD
+[20:39:37.613] OW: created fallback viewport 512x384
+[20:39:37.616] SPRITE: init error NoMethodError: undefined method `name' for #<MP_Game_RemotePlayer> — using placeholder
+[20:39:37.642] SPRITE: set character graphic to 'trainer_POKEMONTRAINER_Red' for aaaaaaaaaa
+[20:39:37.643] OW: created fallback viewport 512x384
+[20:39:37.645] SPRITE: init error NoMethodError: undefined method `name' for #<MP_Game_RemotePlayer> — using placeholder
+[20:39:37.652] SPRITE: name sprite created for aaaaaaaaaa
+[20:39:37.656] OW: sprite created for aaaaaaaaaa
+[20:39:37.656] OW: aaaaaaaaaa joined map 2 (19,15) sprite='1'
+[20:39:37.686] SPRITE: name sprite created for XD
+[20:39:37.722] OW: sprite created for XD
+[20:39:37.724] OW: XD joined map 2 (20,15) sprite='1'
+[20:39:37.727] OW: map player list received (1 players)
+[20:42:31.091] NET: disconnected (Connection lost)
+[20:42:31.954] OW: on_disconnect — clearing sprites, NOT disposing core
+[20:42:31.954] OW: clear_map_sprites called
+[20:42:31.954] SPRITE: name sprite disposed for aaaaaaaaaa
+[20:42:31.954] OW: disposed fallback viewport
+[20:42:31.955] BOOT: disconnected (Connection lost) — clearing sprites only
+[20:42:31.955] OW: on_disconnect — clearing sprites, NOT disposing core
+[20:42:31.955] OW: clear_map_sprites called
+[20:42:31.955] NET: connecting (attempt 1)
+[20:42:32.558] NET: HANDSHAKE_ACK, client_id=ONR2N5DT70P8
+[20:42:32.665] OW: on_map_changed — clearing sprites, NOT disposing core
+[20:42:32.665] OW: clear_map_sprites called
+[20:42:32.981] OW: clear_map_sprites called
+[20:42:32.981] SPRITE: set character graphic to 'trainer_POKEMONTRAINER_Red' for aaaaaaaaaa
+[20:42:32.981] OW: created fallback viewport 512x384
+[20:42:32.982] SPRITE: init error NoMethodError: undefined method `name' for #<MP_Game_RemotePlayer> — using placeholder
+[20:42:32.984] SPRITE: name sprite created for aaaaaaaaaa
+[20:42:32.984] OW: sprite created for aaaaaaaaaa
+[20:42:32.984] OW: aaaaaaaaaa joined map 2 (19,15) sprite='1'
+[20:42:32.985] OW: map player list received (1 players)
+[20:42:33.164] SPRITE: name sprite disposed for XD
+[20:42:33.165] OW: XD left
+[20:42:33.207] SPRITE: set character graphic to 'trainer_POKEMONTRAINER_Red' for XD
+[20:42:33.212] SPRITE: init error NoMethodError: undefined method `name' for #<MP_Game_RemotePlayer> — using placeholder
+[20:42:33.255] NET: disconnected (Connection lost)
+[20:42:33.257] NET: connecting (attempt 1)
+[20:42:33.274] SPRITE: name sprite created for XD
+[20:42:33.275] OW: sprite created for XD
+[20:42:33.275] OW: XD joined map 2 (20,15) sprite='1'
+[20:42:33.289] SPRITE: name sprite disposed for aaaaaaaaaa
+[20:42:33.289] OW: aaaaaaaaaa left
+[20:42:33.315] NET: HANDSHAKE_ACK, client_id=61FCZHET68E2
+[20:42:33.323] OW: on_map_changed — clearing sprites, NOT disposing core
+[20:42:33.324] OW: clear_map_sprites called
+[20:42:33.324] SPRITE: name sprite disposed for XD
+[20:42:33.324] OW: disposed fallback viewport
+[20:42:33.450] SPRITE: set character graphic to 'trainer_POKEMONTRAINER_Red' for aaaaaaaaaa
+[20:42:33.451] SPRITE: init error NoMethodError: undefined method `name' for #<MP_Game_RemotePlayer> — using placeholder
+[20:42:33.452] SPRITE: name sprite created for aaaaaaaaaa
+[20:42:33.453] OW: sprite created for aaaaaaaaaa
+[20:42:33.453] OW: aaaaaaaaaa joined map 2 (19,15) sprite='1'
+[20:42:33.468] OW: clear_map_sprites called
+[20:42:33.469] SPRITE: set character graphic to 'trainer_POKEMONTRAINER_Red' for XD
+[20:42:33.469] OW: created fallback viewport 512x384
+[20:42:33.470] SPRITE: init error NoMethodError: undefined method `name' for #<MP_Game_RemotePlayer> — using placeholder
+[20:42:33.487] SPRITE: name sprite created for XD
+[20:42:33.488] OW: sprite created for XD
+[20:42:33.488] OW: XD joined map 2 (20,15) sprite='1'
+[20:42:33.488] OW: map player list received (1 players)
+[20:56:07.246] NET: disconnected (Send error: Errno::EPIPE: Broken pipe)
+[20:56:07.569] NET: disconnected (Send error: Errno::EPIPE: Broken pipe)
+[20:56:08.231] OW: on_disconnect — clearing sprites, NOT disposing core
+[20:56:08.236] OW: clear_map_sprites called
+[20:56:08.236] SPRITE: name sprite disposed for aaaaaaaaaa
+[20:56:08.236] OW: disposed fallback viewport
+[20:56:08.237] BOOT: disconnected (Send error: Errno::EPIPE: Broken pipe) — clearing sprites only
+[20:56:08.237] OW: on_disconnect — clearing sprites, NOT disposing core
+[20:56:08.237] OW: clear_map_sprites called
+[20:56:08.252] NET: connecting (attempt 1)
+[20:56:11.315] NET: HANDSHAKE_ACK, client_id=YU3Z6CS4WO9H
+[20:56:11.561] OW: on_map_changed — clearing sprites, NOT disposing core
+[20:56:11.561] OW: clear_map_sprites called
+[20:56:11.856] OW: clear_map_sprites called
+[20:56:11.857] SPRITE: set character graphic to 'trainer_POKEMONTRAINER_Red' for aaaaaaaaaa
+[20:56:11.857] OW: created fallback viewport 512x384
+[20:56:11.858] SPRITE: init error NoMethodError: undefined method `name' for #<MP_Game_RemotePlayer> — using placeholder
+[20:56:11.858] SPRITE: name sprite created for aaaaaaaaaa
+[20:56:11.859] OW: sprite created for aaaaaaaaaa
+[20:56:11.859] OW: aaaaaaaaaa joined map 2 (19,15) sprite='1'
+[20:56:11.859] OW: map player list received (1 players)
+[20:57:03.221] SPRITE: name sprite disposed for XD
+[20:57:03.222] OW: XD left
+[20:57:05.870] SPRITE: set character graphic to 'trainer_POKEMONTRAINER_Red' for XD
+[20:57:05.871] SPRITE: init error NoMethodError: undefined method `name' for #<MP_Game_RemotePlayer> — using placeholder
+[20:57:05.888] SPRITE: name sprite created for XD
+[20:57:05.888] OW: sprite created for XD
+[20:57:05.889] OW: XD joined map 2 (20,15) sprite='1'
+[21:03:20.436] NET: disconnected (Send error: Errno::EPIPE: Broken pipe)
+[21:03:20.446] OW: on_disconnect — clearing sprites, NOT disposing core
+[21:03:20.446] OW: clear_map_sprites called
+[21:03:20.447] SPRITE: name sprite disposed for XD
+[21:03:20.447] OW: disposed fallback viewport
+[21:03:20.447] BOOT: disconnected (Send error: Errno::EPIPE: Broken pipe) — clearing sprites only
+[21:03:20.448] NET: connecting (attempt 1)
+[21:03:20.448] OW: on_disconnect — clearing sprites, NOT disposing core
+[21:03:20.448] OW: clear_map_sprites called
+[21:03:20.473] NET: HANDSHAKE_ACK, client_id=CSWGGEQLOQRP
+[21:03:20.482] OW: on_map_changed — clearing sprites, NOT disposing core
+[21:03:20.483] OW: clear_map_sprites called
+[21:03:20.603] OW: clear_map_sprites called
+[21:03:20.604] SPRITE: set character graphic to 'trainer_POKEMONTRAINER_Red' for XD
+[21:03:20.604] OW: created fallback viewport 512x384
+[21:03:20.605] SPRITE: init error NoMethodError: undefined method `name' for #<MP_Game_RemotePlayer> — using placeholder
+[21:03:20.645] SPRITE: name sprite created for XD
+[21:03:20.645] OW: sprite created for XD
+[21:03:20.645] OW: XD joined map 2 (20,15) sprite='1'
+[21:03:20.648] OW: map player list received (1 players)
+[21:03:20.661] SPRITE: name sprite disposed for XD
+[21:03:20.661] OW: XD left
+[21:03:21.149] NET: disconnected (Send error: Errno::EPIPE: Broken pipe)
+[21:03:21.173] OW: on_disconnect — clearing sprites, NOT disposing core
+[21:03:21.173] NET: connecting (attempt 1)
+[21:03:21.174] OW: clear_map_sprites called
+[21:03:21.175] SPRITE: name sprite disposed for aaaaaaaaaa
+[21:03:21.175] OW: disposed fallback viewport
+[21:03:21.176] BOOT: disconnected (Send error: Errno::EPIPE: Broken pipe) — clearing sprites only
+[21:03:21.176] OW: on_disconnect — clearing sprites, NOT disposing core
+[21:03:21.176] OW: clear_map_sprites called
+[21:03:21.176] OW:  left
+[21:03:21.177] SPRITE: set character graphic to 'trainer_POKEMONTRAINER_Red' for aaaaaaaaaa
+[21:03:21.178] OW: created fallback viewport 512x384
+[21:03:21.179] SPRITE: init error NoMethodError: undefined method `name' for #<MP_Game_RemotePlayer> — using placeholder
+[21:03:21.180] SPRITE: name sprite created for aaaaaaaaaa
+[21:03:21.180] OW: sprite created for aaaaaaaaaa
+[21:03:21.180] OW: aaaaaaaaaa joined map 2 (19,15) sprite='1'
+[21:03:21.371] NET: HANDSHAKE_ACK, client_id=CGNJCTDWRT8F
+[21:03:21.384] OW: on_map_changed — clearing sprites, NOT disposing core
+[21:03:21.384] OW: clear_map_sprites called
+[21:03:21.385] SPRITE: name sprite disposed for aaaaaaaaaa
+[21:03:21.385] OW: disposed fallback viewport
+[21:03:21.437] OW: clear_map_sprites called
+[21:03:21.437] SPRITE: set character graphic to 'trainer_POKEMONTRAINER_Red' for aaaaaaaaaa
+[21:03:21.437] OW: created fallback viewport 512x384
+[21:03:21.438] SPRITE: init error NoMethodError: undefined method `name' for #<MP_Game_RemotePlayer> — using placeholder
+[21:03:21.440] SPRITE: name sprite created for aaaaaaaaaa
+[21:03:21.440] OW: sprite created for aaaaaaaaaa
+[21:03:21.440] OW: aaaaaaaaaa joined map 2 (19,15) sprite='1'
+[21:03:21.440] OW: map player list received (1 players)
+[21:03:21.454] SPRITE: set character graphic to 'trainer_POKEMONTRAINER_Red' for XD
+[21:03:21.456] SPRITE: init error NoMethodError: undefined method `name' for #<MP_Game_RemotePlayer> — using placeholder
+[21:03:21.475] SPRITE: name sprite created for XD
+[21:03:21.476] OW: sprite created for XD
+[21:03:21.476] OW: XD joined map 2 (20,15) sprite='1'
+[21:06:24.322] NET: disconnected (Send error: Errno::EPIPE: Broken pipe)
+[21:06:24.349] OW: on_disconnect — clearing sprites, NOT disposing core
+[21:06:24.349] NET: connecting (attempt 1)
+[21:06:24.350] OW: clear_map_sprites called
+[21:06:24.350] SPRITE: name sprite disposed for XD
+[21:06:24.350] OW: disposed fallback viewport
+[21:06:24.351] BOOT: disconnected (Send error: Errno::EPIPE: Broken pipe) — clearing sprites only
+[21:06:24.351] OW: on_disconnect — clearing sprites, NOT disposing core
+[21:06:24.351] OW: clear_map_sprites called
+[21:06:24.671] NET: HANDSHAKE_ACK, client_id=OD56YQE6HHZL
+[21:06:24.708] OW: on_map_changed — clearing sprites, NOT disposing core
+[21:06:24.709] OW: clear_map_sprites called
+[21:06:25.337] OW: clear_map_sprites called
+[21:06:25.338] SPRITE: set character graphic to 'trainer_POKEMONTRAINER_Red' for XD
+[21:06:25.338] OW: created fallback viewport 512x384
+[21:06:25.339] SPRITE: init error NoMethodError: undefined method `name' for #<MP_Game_RemotePlayer> — using placeholder
+[21:06:25.347] SPRITE: name sprite created for XD
+[21:06:25.348] OW: sprite created for XD
+[21:06:25.348] OW: XD joined map 2 (20,15) sprite='1'
+[21:06:25.348] OW: map player list received (1 players)
+[21:06:32.943] SPRITE: name sprite disposed for aaaaaaaaaa
+[21:06:32.944] OW: aaaaaaaaaa left
+[21:06:35.392] SPRITE: set character graphic to 'trainer_POKEMONTRAINER_Red' for aaaaaaaaaa
+[21:06:35.393] SPRITE: init error NoMethodError: undefined method `name' for #<MP_Game_RemotePlayer> — using placeholder
+[21:06:35.394] SPRITE: name sprite created for aaaaaaaaaa
+[21:06:35.394] OW: sprite created for aaaaaaaaaa
+[21:06:35.394] OW: aaaaaaaaaa joined map 2 (19,15) sprite='1'
+[21:10:08.549] NET: disconnected (Send error: Errno::ECONNRESET: An existing connection was forcibly closed by the remote host.)
+[21:10:08.999] OW: on_disconnect — clearing sprites, NOT disposing core
+[21:10:09.000] OW: clear_map_sprites called
+[21:10:09.000] SPRITE: name sprite disposed for aaaaaaaaaa
+[21:10:09.000] OW: disposed fallback viewport
+[21:10:09.001] BOOT: disconnected (Send error: Errno::ECONNRESET: An existing connection was forcibly closed by the remote host.) — clearing sprites only
+[21:10:09.001] OW: on_disconnect — clearing sprites, NOT disposing core
+[21:10:09.001] OW: clear_map_sprites called
+[21:10:09.018] NET: connecting (attempt 1)
+[21:10:11.423] NET: HANDSHAKE_ACK, client_id=FNDVE2X9I10M
+[21:10:11.523] OW: on_map_changed — clearing sprites, NOT disposing core
+[21:10:11.524] OW: clear_map_sprites called
+[21:10:11.606] OW: clear_map_sprites called
+[21:10:11.607] SPRITE: set character graphic to 'trainer_POKEMONTRAINER_Red' for aaaaaaaaaa
+[21:10:11.607] OW: created fallback viewport 512x384
+[21:10:11.608] SPRITE: init error NoMethodError: undefined method `name' for #<MP_Game_RemotePlayer> — using placeholder
+[21:10:11.608] SPRITE: name sprite created for aaaaaaaaaa
+[21:10:11.609] OW: sprite created for aaaaaaaaaa
+[21:10:11.609] OW: aaaaaaaaaa joined map 2 (19,15) sprite='1'
+[21:10:11.609] OW: map player list received (1 players)
+[21:10:27.153] SPRITE: name sprite disposed for XD
+[21:10:27.154] OW: XD left
+[21:10:27.411] SPRITE: set character graphic to 'trainer_POKEMONTRAINER_Red' for XD
+[21:10:27.412] SPRITE: init error NoMethodError: undefined method `name' for #<MP_Game_RemotePlayer> — using placeholder
+[21:10:27.414] SPRITE: name sprite created for XD
+[21:10:27.414] OW: sprite created for XD
+[21:10:27.415] OW: XD joined map 2 (20,15) sprite='1'
+[21:13:45.079] NET: disconnected (Connection lost)
+[21:13:45.088] SPRITE: name sprite disposed for aaaaaaaaaa
+[21:13:45.088] NET: connecting (attempt 1)
+[21:13:45.088] OW: aaaaaaaaaa left
+[21:13:45.088] NET: disconnected (Send error: Errno::EPIPE: Broken pipe)
+[21:13:45.088] OW: on_disconnect — clearing sprites, NOT disposing core
+[21:13:45.090] OW: clear_map_sprites called
+[21:13:45.090] SPRITE: name sprite disposed for XD
+[21:13:45.090] OW: disposed fallback viewport
+[21:13:45.090] BOOT: disconnected (Connection lost) — clearing sprites only
+[21:13:45.091] OW: on_disconnect — clearing sprites, NOT disposing core
+[21:13:45.091] OW: clear_map_sprites called
+[21:13:45.358] NET: HANDSHAKE_ACK, client_id=QRWDM1FDD2PW
+[21:13:45.576] OW: on_disconnect — clearing sprites, NOT disposing core
+[21:13:45.578] OW: clear_map_sprites called
+[21:13:45.578] OW: disposed fallback viewport
+[21:13:45.578] BOOT: disconnected (Send error: Errno::EPIPE: Broken pipe) — clearing sprites only
+[21:13:45.578] OW: on_disconnect — clearing sprites, NOT disposing core
+[21:13:45.579] OW: clear_map_sprites called
+[21:13:45.605] OW: on_map_changed — clearing sprites, NOT disposing core
+[21:13:45.606] OW: clear_map_sprites called
+[21:13:45.601] NET: connecting (attempt 1)
+[21:13:45.731] OW: clear_map_sprites called
+[21:13:45.731] OW: map player list received (0 players)
+[21:13:46.308] NET: HANDSHAKE_ACK, client_id=EUVH64G9GD7Y
+[21:13:46.379] OW: on_map_changed — clearing sprites, NOT disposing core
+[21:13:46.380] OW: clear_map_sprites called
+[21:13:46.460] OW: clear_map_sprites called
+[21:13:46.461] SPRITE: set character graphic to 'trainer_POKEMONTRAINER_Red' for aaaaaaaaaa
+[21:13:46.466] OW: created fallback viewport 512x384
+[21:13:46.467] SPRITE: init error NoMethodError: undefined method `name' for #<MP_Game_RemotePlayer> — using placeholder
+[21:13:46.468] SPRITE: name sprite created for aaaaaaaaaa
+[21:13:46.468] OW: sprite created for aaaaaaaaaa
+[21:13:46.469] OW: aaaaaaaaaa joined map 2 (19,15) sprite='1'
+[21:13:46.469] OW: map player list received (1 players)
+[21:13:46.713] SPRITE: set character graphic to 'trainer_POKEMONTRAINER_Red' for XD
+[21:13:46.713] OW: created fallback viewport 512x384
+[21:13:46.714] SPRITE: init error NoMethodError: undefined method `name' for #<MP_Game_RemotePlayer> — using placeholder
+[21:13:46.720] SPRITE: name sprite created for XD
+[21:13:46.720] OW: sprite created for XD
+[21:13:46.721] OW: XD joined map 2 (20,15) sprite='1'
+[21:14:45.509] HOOK: Scene_Map#main exited — NO MP dispose
+[21:14:46.398] HOOK: Scene_Map#main exited — NO MP dispose
+>>>>>>> aada347da767172eb53ec24119bd43fe6fa1c095
