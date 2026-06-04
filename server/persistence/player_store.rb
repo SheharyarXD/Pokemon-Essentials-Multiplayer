@@ -1,6 +1,6 @@
 #===============================================================================
 #  Pokemon Pathways Multiplayer - Player Data Store
-#  REMOTE SKIN SYNC v3.0 — Persist character_hue, trainer_type
+#  PHASE 2 v4.0 — Persist rank and rank_tier
 #===============================================================================
 
 require 'json'
@@ -37,6 +37,9 @@ class PlayerStore
       "last_y"         => client.pos_y,
       "last_direction" => client.direction,
       "party_display"  => client.party_display,
+      # Phase 2
+      "rank"           => client.rank,
+      "rank_tier"      => client.rank_tier,
       "saved_at"       => Time.now.to_i
     }
 
@@ -62,12 +65,18 @@ class PlayerStore
 
     begin
       data = JSON.parse(File.read(filepath))
-      client.sprite_name   = data["sprite_name"]    if data["sprite_name"]
+      client.sprite_name   = data["sprite_name"]        if data["sprite_name"]
       client.character_hue = data["character_hue"].to_i if data["character_hue"]
-      client.trainer_type  = data["trainer_type"].to_s if data["trainer_type"]
-      client.outfit        = data["outfit"]          unless data["outfit"].nil?
+      client.trainer_type  = data["trainer_type"].to_s  if data["trainer_type"]
+      client.outfit        = data["outfit"]              unless data["outfit"].nil?
       client.party_display = data["party_display"]
-      puts "[STORE] Loaded saved data for #{client.player_name}"
+      # Phase 2 — validate loaded rank against whitelist
+      if data["rank"]
+        loaded_rank     = data["rank"].to_s
+        client.rank     = MP_ServerConfig::VALID_RANKS.include?(loaded_rank) ? loaded_rank : "D"
+        client.rank_tier= data["rank_tier"].to_i
+      end
+      puts "[STORE] Loaded saved data for #{client.player_name} (rank: #{client.rank})"
     rescue => e
       puts "[STORE] Failed to load player #{client.player_name}: #{e.message}"
     end

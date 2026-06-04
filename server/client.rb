@@ -1,6 +1,6 @@
 #===============================================================================
 #  Pokemon Pathways Multiplayer - Client Connection
-#  REMOTE SKIN SYNC v3.0 — Added character_hue, trainer_type fields
+#  PHASE 2 v4.0 — Added rank, rank_tier, partner_id fields
 #===============================================================================
 
 require_relative 'config'
@@ -8,8 +8,11 @@ require_relative 'packet'
 
 class MP_Client
   attr_accessor :socket, :id, :authenticated, :player_name, :map_id,
-                :pos_x, :pos_y, :direction, :sprite_name, :character_hue, :trainer_type, :outfit,
-                :last_heartbeat, :connected_at, :party_display
+                :pos_x, :pos_y, :direction,
+                :sprite_name, :character_hue, :trainer_type, :outfit,
+                :last_heartbeat, :connected_at, :party_display,
+                # Phase 2
+                :rank, :rank_tier, :partner_id
   attr_reader :server
 
   def initialize(socket, server)
@@ -30,12 +33,15 @@ class MP_Client
     @last_heartbeat  = Time.now
     @connected_at    = Time.now
 
-    @receive_buffer  = "".b
+    # Phase 2
+    @rank            = "D"
+    @rank_tier       = 0
+    @partner_id      = nil
 
-    @send_queue      = []
-    @mutex           = Mutex.new
-    @disconnected    = false
-
+    @receive_buffer    = "".b
+    @send_queue        = []
+    @mutex             = Mutex.new
+    @disconnected      = false
     @packets_this_tick = 0
   end
 
@@ -72,7 +78,6 @@ class MP_Client
   def receive_loop
     return if disconnected?
     flush_send_queue
-
     begin
       chunk = @socket.read_nonblock(65536)
       @receive_buffer << chunk.b
@@ -87,7 +92,6 @@ class MP_Client
     while @receive_buffer.bytesize >= MP_Packet::HEADER_SIZE
       length     = @receive_buffer[2, 2].unpack1('n')
       total_size = MP_Packet::HEADER_SIZE + length
-
       break if @receive_buffer.bytesize < total_size
 
       raw_packet      = @receive_buffer[0, total_size]
@@ -129,8 +133,9 @@ class MP_Client
       @disconnected = true
     end
 
-    @server.battles.handle_disconnect(self) rescue nil
-    @server.trades.handle_disconnect(self)  rescue nil
+    @server.battles.handle_disconnect(self)  rescue nil
+    @server.trades.handle_disconnect(self)   rescue nil
+    @server.partners.handle_disconnect(self) rescue nil   # Phase 2
 
     @server.rooms.player_leave_map(self) if @map_id
     @server.clients.remove_client(self)

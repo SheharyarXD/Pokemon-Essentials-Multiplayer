@@ -4,12 +4,12 @@
   "character_hue": 0,
   "trainer_type": "POKEMONTRAINER_Leaf",
   "outfit": 0,
-  "last_map_id": 2,
-  "last_x": 9,
-  "last_y": 14,
-  "last_direction": 4,
+  "last_map_id": null,
+  "last_x": 0,
+  "last_y": 0,
+  "last_direction": 2,
   "party_display": null,
   "rank": "D",
   "rank_tier": 0,
-  "saved_at": 1780577943
+  "saved_at": 1780577643
 }

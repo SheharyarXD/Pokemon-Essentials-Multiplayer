@@ -1,6 +1,6 @@
 #===============================================================================
 #  Pokemon Pathways Multiplayer - Room Manager
-#  REMOTE SKIN SYNC v3.0 — Propagate character_hue, trainer_type in broadcasts
+#  PHASE 2 v4.0 — Include rank in PLAYER_JOIN and MAP_PLAYER_LIST payloads
 #===============================================================================
 
 require_relative 'config'
@@ -33,7 +33,10 @@ class RoomManager
       "character_hue" => client.character_hue,
       "trainer_type"  => client.trainer_type,
       "outfit"        => client.outfit,
-      "party_display" => client.party_display
+      "party_display" => client.party_display,
+      # Phase 2
+      "rank"          => client.rank,
+      "rank_tier"     => client.rank_tier
     })
     @server.broadcast_to_map(map_id, join_packet, client)
 
@@ -53,10 +56,9 @@ class RoomManager
       @map_clients.delete(old_map_id) if @map_clients[old_map_id]&.empty?
     end
 
-    leave_packet = MP_Packet.new(MP_PacketType::PLAYER_LEAVE, {
-      "client_id" => client.id
-    })
-    @server.broadcast_to_map(old_map_id, leave_packet)
+    @server.broadcast_to_map(old_map_id,
+      MP_Packet.new(MP_PacketType::PLAYER_LEAVE, { "client_id" => client.id })
+    )
     puts "[ROOM] #{client.player_name || client.id[0, 8]} left map #{old_map_id}"
   end
 
@@ -74,7 +76,10 @@ class RoomManager
           "character_hue" => c.character_hue,
           "trainer_type"  => c.trainer_type,
           "outfit"        => c.outfit,
-          "party_display" => c.party_display
+          "party_display" => c.party_display,
+          # Phase 2
+          "rank"          => c.rank,
+          "rank_tier"     => c.rank_tier
         }
       end
 

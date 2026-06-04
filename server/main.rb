@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 #===============================================================================
 #  Pokemon Pathways Multiplayer Server - Entry Point
-#  Loads all components, starts the server, handles SIGINT/SIGTERM gracefully.
+#  PHASE 2 v4.0 — Requires rank_service and partner_service
 #===============================================================================
 
 require 'socket'
@@ -22,15 +22,13 @@ require_relative 'game_server'
 FileUtils.mkdir_p(MP_ServerConfig::PLAYERS_DIR)
 FileUtils.mkdir_p(MP_ServerConfig::BACKUP_DIR)
 
-puts "[SERVER] Starting Pokemon Pathways Multiplayer Server..."
+puts "[SERVER] Starting Pokemon Pathways Multiplayer Server (Phase 2)..."
 puts "[SERVER] Ruby version : #{RUBY_VERSION}"
 puts "[SERVER] Server root  : #{SERVER_ROOT}"
 
 $game_server = GameServer.new
 $mp_server_shutdown_requested = false
 
-# Trap context cannot safely call mutex/IO-heavy stop — only set a flag; the main
-# game loop thread performs disconnect_all and socket close (avoids ThreadError).
 ["INT", "TERM"].each do |sig|
   begin
     trap(sig) do
@@ -38,7 +36,7 @@ $mp_server_shutdown_requested = false
       STDERR.puts "\n[SERVER] #{sig} received — shutdown scheduled (finishing this tick)..."
     end
   rescue ArgumentError
-    # Unsupported signal name on this OS
+    # Unsupported signal on this OS
   end
 end
 
